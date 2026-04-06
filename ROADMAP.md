@@ -46,13 +46,13 @@ Mark findings as "intentional" (e.g., hover states should differ) so they don't 
 
 Turn one-off audits into ongoing quality improvement.
 
-### 3.1 Scan History + Trends
+### 3.1 Scan History + Trends ✅
 Store scan summaries over time. Show trend charts: "47 duplicate patterns last week → 38 this week." Motivation and progress visibility.
 
-### 3.2 Baseline Diffing
+### 3.2 Baseline Diffing ✅
 Compare current scan against a saved baseline. Highlight new duplicates introduced since the baseline — useful for PR review ("this branch added 3 new duplicate patterns").
 
-### 3.3 CI Integration
+### 3.3 CI Integration ✅
 Export scan results as JSON from a headless run. Provide a GitHub Action that fails if duplicate count exceeds a configurable threshold. Component Cop becomes a quality gate, not just a DevTools panel.
 
 ---
@@ -77,5 +77,5 @@ Quick scan (\`Ctrl+Shift+S\`), toggle picker (\`Ctrl+Shift+P\`), cycle patterns 
 | 1 | 1.1, ~~1.3~~, ~~2.4~~ | Source mapping unlocks everything; style diffs ✅; triage ✅ |
 | 2 | ~~2.2~~, ~~2.3~~ | Token extraction ✅ + per-pattern prompts ✅ |
 | 3 | ~~1.2~~, ~~1.4~~, ~~2.1~~ | Prop diffs ✅, dependency graph ✅, consolidation suggestions ✅ |
-| 4 | 3.1, 3.2, 3.3 | Tracking and CI turn it from a tool into a workflow |
+| 4 | ~~3.1~~, ~~3.2~~, ~~3.3~~ | Tracking ✅ and CI ✅ turn it from a tool into a workflow |
 | 5 | 4.1, 4.2, 4.3 | Polish after core value is solid |

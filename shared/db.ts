@@ -1,6 +1,7 @@
 import { openDB, type IDBPDatabase } from 'idb';
 import { DB_NAME, DB_VERSION } from './constants';
 import type { ColorSummary, ComponentData, DismissedPattern, StoredComponent, StoredPage, StoredPattern } from './types';
+import type { ScanSnapshot } from './scan-history';
 
 interface ReactXrayDB {
   components: {
@@ -26,6 +27,13 @@ interface ReactXrayDB {
   dismissed: {
     key: string;
     value: DismissedPattern;
+  };
+  snapshots: {
+    key: number;
+    value: ScanSnapshot;
+    indexes: {
+      'by-timestamp': number;
+    };
   };
 }
 
@@ -55,6 +63,11 @@ export async function getDB(): Promise<IDBPDatabase<ReactXrayDB>> {
       if (oldVersion < 2) {
         // v2: Dismissed patterns store
         db.createObjectStore('dismissed', { keyPath: 'patternId' });
+      }
+      if (oldVersion < 3) {
+        // v3: Scan snapshots for history tracking
+        const snapshotStore = db.createObjectStore('snapshots', { keyPath: 'id', autoIncrement: true });
+        snapshotStore.createIndex('by-timestamp', 'timestamp');
       }
     },
   });
@@ -133,12 +146,38 @@ export async function storePatterns(patterns: StoredPattern[]): Promise<void> {
 
 export async function clearAllData(): Promise<void> {
   const db = await getDB();
-  const tx = db.transaction(['components', 'pages', 'patterns', 'dismissed'], 'readwrite');
+  const tx = db.transaction(['components', 'pages', 'patterns', 'dismissed', 'snapshots'], 'readwrite');
   tx.objectStore('components').clear();
   tx.objectStore('pages').clear();
   tx.objectStore('patterns').clear();
   tx.objectStore('dismissed').clear();
+  tx.objectStore('snapshots').clear();
   await tx.done;
+}
+
+
+// ─── Scan Snapshots ───
+
+export async function saveSnapshot(snapshot: Omit<ScanSnapshot, 'id'>): Promise<number> {
+  const db = await getDB();
+  return db.add('snapshots', snapshot as ScanSnapshot);
+}
+
+export async function getAllSnapshots(): Promise<ScanSnapshot[]> {
+  const db = await getDB();
+  const all = await db.getAllFromIndex('snapshots', 'by-timestamp');
+  return all.reverse(); // newest first
+}
+
+export async function deleteSnapshot(id: number): Promise<void> {
+  const db = await getDB();
+  await db.delete('snapshots', id);
+}
+
+export async function getLatestSnapshot(): Promise<ScanSnapshot | undefined> {
+  const db = await getDB();
+  const all = await db.getAllFromIndex('snapshots', 'by-timestamp');
+  return all[all.length - 1];
 }
 
 // ─── Dismissed patterns ───

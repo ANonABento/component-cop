@@ -12,8 +12,10 @@ import { PickerTab, type PickerResult } from './PickerTab';
 import { CrawlTab } from './CrawlTab';
 import { DashboardTab } from './DashboardTab';
 import { ExportTab } from './ExportTab';
+import { HistoryTab } from './HistoryTab';
+import type { ScanSnapshot } from '../../shared/scan-history';
 
-type Tab = 'scan' | 'picker' | 'crawl' | 'dashboard' | 'export';
+type Tab = 'scan' | 'picker' | 'crawl' | 'dashboard' | 'export' | 'history';
 
 // Inject keyframe animations once (not per-render)
 const KEYFRAMES_INJECTED = (() => {
@@ -41,6 +43,8 @@ export function App() {
   const [pickerResult, setPickerResult] = useState<PickerResult | null>(null);
   const [patterns, setPatterns] = useState<StoredPattern[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [snapshots, setSnapshots] = useState<ScanSnapshot[]>([]);
+  const [baselineId, setBaselineId] = useState<number | null>(null);
   const [navStatus, setNavStatus] = useState<{ current: number; total: number } | null>(null);
   const [crawlProgress, setCrawlProgress] = useState<CrawlProgress | null>(null);
   const crawlProgressRef = useRef<CrawlProgress | null>(null);
@@ -128,6 +132,8 @@ export function App() {
             setLastScan(null);
             setPickerResult(null);
             setCrawlProgress(null);
+            setSnapshots([]);
+            setBaselineId(null);
             break;
           case 'DISMISSED_PATTERNS':
             setDismissed(new Set(msg.payload.map((d: DismissedPattern) => d.patternId)));
@@ -137,6 +143,17 @@ export function App() {
           case 'DISMISSED_CLEARED':
             // Refresh dismissed set from IDB
             if (portRef.current) sendMsg(portRef.current, { type: 'GET_DISMISSED' });
+            break;
+          case 'ALL_SNAPSHOTS':
+            setSnapshots(msg.payload);
+            break;
+          case 'SNAPSHOT_SAVED':
+          case 'SNAPSHOT_DELETED':
+            // Refresh snapshots list
+            if (portRef.current) sendMsg(portRef.current, { type: 'GET_SNAPSHOTS' });
+            break;
+          case 'BASELINE_SET':
+            setBaselineId(msg.id);
             break;
         }
       });
@@ -154,6 +171,7 @@ export function App() {
       sendMsg(port, { type: 'GET_ALL_COMPONENTS' });
       sendMsg(port, { type: 'GET_PATTERNS' });
       sendMsg(port, { type: 'GET_DISMISSED' });
+      sendMsg(port, { type: 'GET_SNAPSHOTS' });
     }
 
     connect();
@@ -305,6 +323,7 @@ export function App() {
     { key: 'crawl', label: 'Crawl' },
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'export', label: 'Export' },
+    { key: 'history', label: 'History' },
   ];
 
   return (
@@ -369,6 +388,16 @@ export function App() {
         )}
         {tab === 'export' && (
           <ExportTab components={allComponents} pages={pages} patterns={patterns} />
+        )}
+        {tab === 'history' && (
+          <HistoryTab
+            snapshots={snapshots}
+            baselineId={baselineId}
+            onSave={(label) => { if (portRef.current) sendMsg(portRef.current, { type: 'SAVE_SNAPSHOT', label }); }}
+            onDelete={(id) => { if (portRef.current) sendMsg(portRef.current, { type: 'DELETE_SNAPSHOT', id }); }}
+            onSetBaseline={(id) => setBaselineId(id)}
+            onClearBaseline={() => setBaselineId(null)}
+          />
         )}
       </div>
 

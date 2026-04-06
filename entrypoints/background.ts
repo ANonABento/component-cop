@@ -11,7 +11,11 @@ import {
   getAllPatterns,
   storeScanResults,
   storePatterns,
+  saveSnapshot,
+  getAllSnapshots,
+  deleteSnapshot,
 } from '../shared/db';
+import type { ScanSnapshot } from '../shared/scan-history';
 import { SIMILARITY_THRESHOLD } from '../shared/constants';
 import { computeSimilarity } from '../shared/similarity';
 import { findNearDuplicateColors } from '../lib/color-distance';
@@ -393,6 +397,69 @@ export default defineBackground(() => {
       case 'CLEAR_DISMISSED': {
         await clearDismissed();
         safeSend(port, { type: 'DISMISSED_CLEARED' });
+        break;
+      }
+
+      case 'SAVE_SNAPSHOT': {
+        // Build snapshot from current state
+        const snapPages = await getAllPages();
+        const snapComps = await getAllComponents();
+        const snapPatterns = await getAllPatterns();
+        const multiVariant = snapPatterns.filter((p) => p.variants.length > 1).length;
+
+        // Aggregate color stats
+        let hcColors = 0;
+        let nearDups = 0;
+        const seenDups = new Set<string>();
+        for (const page of snapPages) {
+          if (!page.colorSummary) continue;
+          hcColors += page.colorSummary.topColors.length;
+          for (const dup of page.colorSummary.nearDuplicates) {
+            const key = [dup.a, dup.b].sort().join(':');
+            if (!seenDups.has(key)) { seenDups.add(key); nearDups++; }
+          }
+        }
+
+        const snapshotData: Omit<ScanSnapshot, 'id'> = {
+          timestamp: Date.now(),
+          label: msg.label,
+          pagesScanned: snapPages.length,
+          totalComponents: snapComps.length,
+          patternGroups: snapPatterns.length,
+          multiVariantPatterns: multiVariant,
+          hardcodedColors: hcColors,
+          nearDuplicateColors: nearDups,
+          patternSummary: snapPatterns.map((p) => ({
+            name: p.name,
+            variantCount: p.variants.length,
+            totalInstances: p.totalInstances,
+          })),
+        };
+        const snapId = await saveSnapshot(snapshotData);
+        safeSend(port, { type: 'SNAPSHOT_SAVED', id: snapId });
+        break;
+      }
+
+      case 'GET_SNAPSHOTS': {
+        const snapshots = await getAllSnapshots();
+        safeSend(port, { type: 'ALL_SNAPSHOTS', payload: snapshots });
+        break;
+      }
+
+      case 'DELETE_SNAPSHOT': {
+        await deleteSnapshot(msg.id);
+        safeSend(port, { type: 'SNAPSHOT_DELETED' });
+        break;
+      }
+
+      case 'SET_BASELINE': {
+        // Baseline ID stored in panel state, not in IDB (lightweight)
+        safeSend(port, { type: 'BASELINE_SET', id: msg.id });
+        break;
+      }
+
+      case 'CLEAR_BASELINE': {
+        safeSend(port, { type: 'BASELINE_SET', id: null });
         break;
       }
     }

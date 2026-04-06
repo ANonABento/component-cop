@@ -89,4 +89,4 @@ export const MAX_DOM_DEPTH = 3;
 
 /** Database name and version */
 export const DB_NAME = 'react-xray';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
