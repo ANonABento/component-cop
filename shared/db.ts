@@ -85,9 +85,10 @@ export async function storeScanResults(
     store.delete(key);
   }
 
-  // Insert new components
+  // Insert new components (strip any stale id to let autoIncrement assign fresh keys)
   for (const comp of components) {
-    store.add(comp as StoredComponent);
+    const { id: _staleId, ...data } = comp as StoredComponent;
+    store.add(data as StoredComponent);
   }
 
   // Update page record

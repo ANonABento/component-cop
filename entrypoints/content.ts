@@ -49,8 +49,14 @@ export default defineContentScript({
     // ─── Listen for messages from background service worker → content → injected ───
     if (chrome.runtime?.id) {
       try {
+        // Only forward messages intended for the injected script — don't leak IDB data to the page
+        const INJECTED_MESSAGE_TYPES = new Set([
+          'START_SCAN', 'ENTER_PICKER_MODE', 'EXIT_PICKER_MODE',
+          'NAVIGATE_SIMILAR', 'NAVIGATE_NEXT', 'NAVIGATE_PREV', 'NAVIGATE_EXIT',
+          'SIMILAR_RESULTS',
+        ]);
         chrome.runtime.onMessage.addListener((message: { type: string; payload?: unknown }) => {
-          // Forward to injected script via window.postMessage
+          if (!INJECTED_MESSAGE_TYPES.has(message.type)) return;
           window.postMessage(
             {
               source: CONTENT_SOURCE,

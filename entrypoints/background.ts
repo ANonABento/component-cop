@@ -270,6 +270,11 @@ export default defineBackground(() => {
         // Navigate the tab to the target URL, then auto-trigger navigator after load
         const { tabId, url, target } = msg;
         try {
+          // Remove any previous GOTO listener to prevent stacking
+          if (pendingGotoListener) {
+            chrome.tabs.onUpdated.removeListener(pendingGotoListener);
+            pendingGotoListener = null;
+          }
           await chrome.tabs.update(tabId, { url });
           // Wait for the page to finish loading, then trigger navigator
           const listener = (
@@ -278,6 +283,7 @@ export default defineBackground(() => {
           ) => {
             if (updatedTabId === tabId && changeInfo.status === 'complete') {
               chrome.tabs.onUpdated.removeListener(listener);
+              pendingGotoListener = null;
               // Small delay to let content script + injected script initialize
               setTimeout(async () => {
                 try {
@@ -291,9 +297,13 @@ export default defineBackground(() => {
               }, 1500);
             }
           };
+          pendingGotoListener = listener;
           chrome.tabs.onUpdated.addListener(listener);
           // Safety timeout: remove listener after 30s to prevent leaks
-          setTimeout(() => chrome.tabs.onUpdated.removeListener(listener), 30_000);
+          setTimeout(() => {
+            chrome.tabs.onUpdated.removeListener(listener);
+            if (pendingGotoListener === listener) pendingGotoListener = null;
+          }, 30_000);
         } catch {
           console.warn('[component-cop bg] Failed to navigate tab');
         }
@@ -713,9 +723,11 @@ export default defineBackground(() => {
         });
 
         // Safety: if no scan result comes back within 15s, skip this page
+        const scanId = crawler ? ++crawler.currentScanId : 0;
         setTimeout(() => {
-          if (crawler && crawler.status === 'crawling' && crawler.currentUrl === url) {
+          if (crawler && crawler.status === 'crawling' && crawler.currentScanId === scanId) {
             crawler.errors.push(`Timeout scanning ${new URL(url).pathname}`);
+            crawler.currentUrl = null;
             crawler.scannedCount++;
             broadcastCrawlProgress();
             setTimeout(crawlNext, crawler.config.delayMs);
@@ -742,7 +754,8 @@ export default defineBackground(() => {
   function onCrawlScanComplete(scan: ScanResult): void {
     if (!crawler || crawler.status !== 'crawling') return;
 
-    crawler.currentUrl = null; // Clear so timeout guard doesn't double-fire
+    crawler.currentScanId++; // Invalidate any pending timeout
+    crawler.currentUrl = null;
     crawler.scannedCount++;
 
     // Add newly discovered links to the queue

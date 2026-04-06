@@ -1,4 +1,5 @@
 import { DEFAULT_CRAWL_CONFIG, MIN_ELEMENT_SIZE, SKIP_COMPONENT_NAMES, SKIP_FIBER_TAGS } from '../shared/constants';
+import { isExcluded } from '../shared/url-utils';
 import type {
   ComponentData,
   Fiber,
@@ -465,14 +466,7 @@ function discoverLinks(): string[] {
     const url = new URL(href);
     const path = url.pathname;
 
-    // Skip paths matching exclude patterns (glob-style: * matches any suffix)
-    const excluded = excludePatterns.some((pattern) => {
-      if (pattern.endsWith('*')) {
-        return path.startsWith(pattern.slice(0, -1));
-      }
-      return path === pattern;
-    });
-    if (excluded) continue;
+    if (isExcluded(path, excludePatterns)) continue;
 
     links.add(path);
   }

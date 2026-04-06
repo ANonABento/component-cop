@@ -1,3 +1,4 @@
+import { parseRGB as parseRGBShared } from '../shared/color-utils';
 import { STYLE_PROPERTIES } from '../shared/constants';
 import { simpleHash } from '../shared/hash';
 

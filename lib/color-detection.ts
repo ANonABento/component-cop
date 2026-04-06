@@ -1,3 +1,4 @@
+import { rgbToHex as rgbToHexShared } from '../shared/color-utils';
 /** Color finding from a single element (no component context) */
 export interface ElementColorFinding {
   property: string;
@@ -145,13 +146,6 @@ function checkIfFromCSSVariable(
   return false;
 }
 
-function rgbToHex(rgb: string): string {
-  const match = rgb.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
-  if (!match) return rgb;
-  const r = Number(match[1]);
-  const g = Number(match[2]);
-  const b = Number(match[3]);
-  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
-}
+const rgbToHex = rgbToHexShared;
 
 // findNearDuplicateColors is in color-distance.ts (no DOM dependency, safe for service worker)

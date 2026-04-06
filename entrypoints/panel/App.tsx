@@ -146,9 +146,19 @@ export function App() {
             setPages([]);
             setAllComponents([]);
             setPatterns([]);
+            setDismissed(new Set());
             setLastScan(null);
             setPickerResult(null);
             setCrawlProgress(null);
+            break;
+          case 'DISMISSED_PATTERNS':
+            setDismissed(new Set(msg.payload.map((d: DismissedPattern) => d.patternId)));
+            break;
+          case 'PATTERN_DISMISSED':
+          case 'PATTERN_RESTORED':
+          case 'DISMISSED_CLEARED':
+            // Refresh dismissed set from IDB
+            if (portRef.current) sendMsg(portRef.current, { type: 'GET_DISMISSED' });
             break;
         }
       });
@@ -165,6 +175,7 @@ export function App() {
       sendMsg(port, { type: 'GET_ALL_PAGES' });
       sendMsg(port, { type: 'GET_ALL_COMPONENTS' });
       sendMsg(port, { type: 'GET_PATTERNS' });
+      sendMsg(port, { type: 'GET_DISMISSED' });
     }
 
     connect();
@@ -172,6 +183,7 @@ export function App() {
       disposed = true;
       port?.disconnect();
       portRef.current = null;
+      if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
     };
   }, []);
 
@@ -375,7 +387,7 @@ export function App() {
           />
         )}
         {tab === 'dashboard' && (
-          <DashboardTab pages={pages} components={allComponents} patterns={patterns} dismissed={dismissed} onDismiss={(id, reason) => portRef.current?.postMessage({ type: 'DISMISS_PATTERN', patternId: id, reason } satisfies PanelToBackgroundMessage)} onRestore={(id) => portRef.current?.postMessage({ type: 'RESTORE_PATTERN', patternId: id } satisfies PanelToBackgroundMessage)} />
+          <DashboardTab pages={pages} components={allComponents} patterns={patterns} dismissed={dismissed} onDismiss={(id, reason) => { if (portRef.current) sendMsg(portRef.current, { type: 'DISMISS_PATTERN', patternId: id, reason }); }} onRestore={(id) => { if (portRef.current) sendMsg(portRef.current, { type: 'RESTORE_PATTERN', patternId: id }); }} />
         )}
         {tab === 'export' && (
           <ExportTab components={allComponents} pages={pages} patterns={patterns} />

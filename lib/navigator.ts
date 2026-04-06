@@ -242,17 +242,20 @@ function findVisibleHostElement(fiber: Fiber): HTMLElement | null {
     return null;
   }
 
-  // Walk down to find the first host child
-  let child = fiber.child;
-  while (child) {
-    if (child.stateNode instanceof HTMLElement) {
-      const el = child.stateNode;
+  // DFS through all descendants (not just direct children) to find first visible host element
+  const stack: Fiber[] = [];
+  if (fiber.child) stack.push(fiber.child);
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    if (current.stateNode instanceof HTMLElement) {
+      const el = current.stateNode;
       const rect = el.getBoundingClientRect();
       if (rect.width >= MIN_ELEMENT_SIZE && rect.height >= MIN_ELEMENT_SIZE) {
         return el;
       }
     }
-    child = child.sibling;
+    if (current.sibling) stack.push(current.sibling);
+    if (current.child) stack.push(current.child);
   }
   return null;
 }
