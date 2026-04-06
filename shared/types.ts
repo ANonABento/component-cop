@@ -151,3 +151,9 @@ export interface CrawlProgress {
   currentPath: string | null;
   errors: string[];
 }
+
+export interface DismissedPattern {
+  patternId: string;
+  reason: string;
+  dismissedAt: number;
+}

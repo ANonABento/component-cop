@@ -63,7 +63,11 @@ export type PanelToBackgroundMessage =
   | { type: 'GET_ALL_PAGES' }
   | { type: 'GET_ALL_COMPONENTS' }
   | { type: 'GET_PATTERNS' }
-  | { type: 'CLEAR_ALL_DATA' };
+  | { type: 'CLEAR_ALL_DATA' }
+  | { type: 'DISMISS_PATTERN'; patternId: string; reason: string }
+  | { type: 'RESTORE_PATTERN'; patternId: string }
+  | { type: 'GET_DISMISSED' }
+  | { type: 'CLEAR_DISMISSED' };
 
 export type BackgroundToPanelMessage =
   | { type: 'SCAN_COMPLETE'; payload: ScanResult }
@@ -75,7 +79,11 @@ export type BackgroundToPanelMessage =
   | { type: 'ALL_PAGES'; payload: import('./types').StoredPage[] }
   | { type: 'ALL_COMPONENTS'; payload: import('./types').StoredComponent[] }
   | { type: 'ALL_PATTERNS'; payload: import('./types').StoredPattern[] }
-  | { type: 'DATA_CLEARED' };
+  | { type: 'DATA_CLEARED' }
+  | { type: 'DISMISSED_PATTERNS'; payload: import('./types').DismissedPattern[] }
+  | { type: 'PATTERN_DISMISSED' }
+  | { type: 'PATTERN_RESTORED' }
+  | { type: 'DISMISSED_CLEARED' };
 
 // ─── Helpers ───
 

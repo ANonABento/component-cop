@@ -3,9 +3,10 @@ import type {
   BackgroundToPanelMessage,
   PanelToBackgroundMessage,
 } from '../../shared/messages';
-import type { ComponentData, CrawlConfig, CrawlProgress, ReactDetectionResult, ScanResult, SimilarityMatch, StoredComponent, StoredPage, StoredPattern } from '../../shared/types';
+import type { ComponentData, CrawlConfig, CrawlProgress, DismissedPattern, ReactDetectionResult, ScanResult, SimilarityMatch, StoredComponent, StoredPage, StoredPattern } from '../../shared/types';
 import { DEFAULT_CRAWL_CONFIG, EXACT_MATCH_THRESHOLD, STRONG_MATCH_THRESHOLD } from '../../shared/constants';
 import { variantLabel } from '../../shared/variant-label';
+import { computeStyleDiff, type StyleDiffEntry } from '../../lib/style-diff';
 
 // ─── Design tokens (dark theme matching Chrome DevTools) ───
 const T = {
@@ -61,6 +62,7 @@ export function App() {
   const [picking, setPicking] = useState(false);
   const [pickerResult, setPickerResult] = useState<PickerResult | null>(null);
   const [patterns, setPatterns] = useState<StoredPattern[]>([]);
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [navStatus, setNavStatus] = useState<{ current: number; total: number } | null>(null);
   const [crawlProgress, setCrawlProgress] = useState<CrawlProgress | null>(null);
   const crawlProgressRef = useRef<CrawlProgress | null>(null);
@@ -373,7 +375,7 @@ export function App() {
           />
         )}
         {tab === 'dashboard' && (
-          <DashboardTab pages={pages} components={allComponents} patterns={patterns} />
+          <DashboardTab pages={pages} components={allComponents} patterns={patterns} dismissed={dismissed} onDismiss={(id, reason) => portRef.current?.postMessage({ type: 'DISMISS_PATTERN', patternId: id, reason } satisfies PanelToBackgroundMessage)} onRestore={(id) => portRef.current?.postMessage({ type: 'RESTORE_PATTERN', patternId: id } satisfies PanelToBackgroundMessage)} />
         )}
         {tab === 'export' && (
           <ExportTab components={allComponents} pages={pages} patterns={patterns} />
@@ -1443,13 +1445,17 @@ function aggregateColorStats(pages: StoredPage[]): AggregatedColorStats {
 
 // ─── Dashboard Tab ───
 
-function DashboardTab({ pages, components, patterns }: {
+function DashboardTab({ pages, components, patterns, dismissed, onDismiss, onRestore }: {
   pages: StoredPage[];
   components: StoredComponent[];
   patterns: StoredPattern[];
+  dismissed: Set<string>;
+  onDismiss: (patternId: string, reason: string) => void;
+  onRestore: (patternId: string) => void;
 }) {
   const [filter, setFilter] = useState('');
   const [showVariantsOnly, setShowVariantsOnly] = useState(false);
+  const [showDismissed, setShowDismissed] = useState(false);
   const [expandedPattern, setExpandedPattern] = useState<string | null>(null);
   const [dashSection, setDashSection] = useState<'patterns' | 'colors'>('patterns');
   const [severityFilter, setSeverityFilter] = useState<'all' | 'inline' | 'non-tailwind' | 'tw-arbitrary'>('all');
@@ -1463,13 +1469,14 @@ function DashboardTab({ pages, components, patterns }: {
 
   const filteredPatterns = useMemo(() => {
     let result = patterns;
+    if (!showDismissed) result = result.filter((p) => !dismissed.has(p.patternId));
     if (showVariantsOnly) result = result.filter((p) => p.variants.length > 1);
     if (filter) {
       const q = filter.toLowerCase();
       result = result.filter((p) => p.name.toLowerCase().includes(q));
     }
     return result;
-  }, [patterns, filter, showVariantsOnly]);
+  }, [patterns, filter, showVariantsOnly, dismissed, showDismissed]);
 
   const multiVariantCount = useMemo(
     () => patterns.filter((p) => p.variants.length > 1).length,
@@ -1533,6 +1540,18 @@ function DashboardTab({ pages, components, patterns }: {
                 style={{ accentColor: T.accent }}
               />
               Variants only
+            </label>
+            <label style={{
+              fontSize: 11, color: T.textMuted, display: 'flex', alignItems: 'center',
+              gap: 4, cursor: 'pointer', whiteSpace: 'nowrap',
+            }}>
+              <input
+                type="checkbox"
+                checked={showDismissed}
+                onChange={(e) => setShowDismissed(e.target.checked)}
+                style={{ accentColor: T.accent }}
+              />
+              Show dismissed ({dismissed.size})
             </label>
           </div>
 
@@ -1616,7 +1635,39 @@ function DashboardTab({ pages, components, patterns }: {
                           </div>
                         );
                       })}
-                      <CopyPatternForLLM pattern={pattern} componentById={componentById} />
+                      {/* Style Diff (only for multi-variant patterns) */}
+                      {pattern.variants.length > 1 && (
+                        <StyleDiffView variants={pattern.variants} componentById={componentById} />
+                      )}
+
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+                        <CopyPatternForLLM pattern={pattern} componentById={componentById} />
+                        {dismissed.has(pattern.patternId) ? (
+                          <button
+                            onClick={() => onRestore(pattern.patternId)}
+                            style={{
+                              padding: '4px 10px', fontSize: 10, fontWeight: 600,
+                              background: 'rgba(52, 211, 153, 0.12)', color: T.green,
+                              border: `1px solid ${T.green}33`, borderRadius: T.radiusSm,
+                              cursor: 'pointer', fontFamily: 'inherit',
+                            }}
+                          >
+                            Restore
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => onDismiss(pattern.patternId, 'intentional')}
+                            style={{
+                              padding: '4px 10px', fontSize: 10, fontWeight: 600,
+                              background: 'rgba(107, 109, 128, 0.12)', color: T.textMuted,
+                              border: `1px solid ${T.border}`, borderRadius: T.radiusSm,
+                              cursor: 'pointer', fontFamily: 'inherit',
+                            }}
+                          >
+                            Dismiss
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1745,6 +1796,79 @@ function SeverityBadge({ severity }: { severity: string }) {
     }}>
       {severity}
     </span>
+  );
+}
+
+
+// ─── Style Diff View ───
+
+function StyleDiffView({ variants, componentById }: {
+  variants: StoredPattern['variants'];
+  componentById: Map<number, StoredComponent>;
+}) {
+  const diffs = useMemo(() => {
+    const variantStyles = new Map<string, Record<string, string>>();
+    for (const v of variants) {
+      const exemplar = componentById.get(v.exemplarComponentId);
+      if (exemplar?.computedStyles) {
+        variantStyles.set(v.variantId, exemplar.computedStyles);
+      }
+    }
+    return computeStyleDiff(variantStyles);
+  }, [variants, componentById]);
+
+  const variantLabels = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const v of variants) map.set(v.variantId, v.label);
+    return map;
+  }, [variants]);
+
+  if (diffs.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: 8, marginBottom: 4 }}>
+      <div style={{ fontSize: 10, fontWeight: 600, color: T.textMuted, marginBottom: 6 }}>
+        Style Differences ({diffs.length} properties)
+      </div>
+      <div style={{
+        background: T.bg, borderRadius: T.radiusSm,
+        border: `1px solid ${T.borderLight}`, overflow: 'hidden',
+      }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, fontFamily: T.mono }}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+              <th style={{ padding: '4px 8px', textAlign: 'left', color: T.textDim, fontWeight: 600 }}>Property</th>
+              {variants.map((v) => (
+                <th key={v.variantId} style={{ padding: '4px 8px', textAlign: 'left', color: T.orange, fontWeight: 600 }}>
+                  {variantLabels.get(v.variantId) ?? v.variantId}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {diffs.slice(0, 20).map((diff) => (
+              <tr key={diff.property} style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+                <td style={{ padding: '3px 8px', color: T.accent }}>{diff.property}</td>
+                {variants.map((v) => {
+                  const val = diff.values.get(v.variantId) ?? '';
+                  const shortVal = val.length > 30 ? val.slice(0, 27) + '...' : val;
+                  return (
+                    <td key={v.variantId} style={{ padding: '3px 8px', color: T.text }} title={val}>
+                      {shortVal}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {diffs.length > 20 && (
+          <div style={{ padding: '4px 8px', fontSize: 10, color: T.textDim, textAlign: 'center' }}>
+            +{diffs.length - 20} more properties
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

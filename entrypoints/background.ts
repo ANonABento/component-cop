@@ -343,6 +343,30 @@ export default defineBackground(() => {
         safeSend(port, { type: 'DATA_CLEARED' });
         break;
       }
+
+      case 'DISMISS_PATTERN': {
+        await dismissPattern(msg.patternId, msg.reason);
+        safeSend(port, { type: 'PATTERN_DISMISSED' });
+        break;
+      }
+
+      case 'RESTORE_PATTERN': {
+        await restorePattern(msg.patternId);
+        safeSend(port, { type: 'PATTERN_RESTORED' });
+        break;
+      }
+
+      case 'GET_DISMISSED': {
+        const dismissed = await getDismissedPatterns();
+        safeSend(port, { type: 'DISMISSED_PATTERNS', payload: dismissed });
+        break;
+      }
+
+      case 'CLEAR_DISMISSED': {
+        await clearDismissed();
+        safeSend(port, { type: 'DISMISSED_CLEARED' });
+        break;
+      }
     }
   }
 

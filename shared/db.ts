@@ -1,6 +1,6 @@
 import { openDB, type IDBPDatabase } from 'idb';
 import { DB_NAME, DB_VERSION } from './constants';
-import type { ColorSummary, ComponentData, StoredComponent, StoredPage, StoredPattern } from './types';
+import type { ColorSummary, ComponentData, DismissedPattern, StoredComponent, StoredPage, StoredPattern } from './types';
 
 interface ReactXrayDB {
   components: {
@@ -22,6 +22,10 @@ interface ReactXrayDB {
   patterns: {
     key: string;
     value: StoredPattern;
+  };
+  dismissed: {
+    key: string;
+    value: DismissedPattern;
   };
 }
 
@@ -48,7 +52,10 @@ export async function getDB(): Promise<IDBPDatabase<ReactXrayDB>> {
         db.createObjectStore('pages', { keyPath: 'pagePath' });
         db.createObjectStore('patterns', { keyPath: 'patternId' });
       }
-      // Future migrations: if (oldVersion < 2) { ... }
+      if (oldVersion < 2) {
+        // v2: Dismissed patterns store
+        db.createObjectStore('dismissed', { keyPath: 'patternId' });
+      }
     },
   });
 
@@ -130,4 +137,26 @@ export async function clearAllData(): Promise<void> {
   tx.objectStore('pages').clear();
   tx.objectStore('patterns').clear();
   await tx.done;
+}
+
+// ─── Dismissed patterns ───
+
+export async function getDismissedPatterns(): Promise<DismissedPattern[]> {
+  const db = await getDB();
+  return db.getAll('dismissed');
+}
+
+export async function dismissPattern(patternId: string, reason: string): Promise<void> {
+  const db = await getDB();
+  await db.put('dismissed', { patternId, reason, dismissedAt: Date.now() });
+}
+
+export async function restorePattern(patternId: string): Promise<void> {
+  const db = await getDB();
+  await db.delete('dismissed', patternId);
+}
+
+export async function clearDismissed(): Promise<void> {
+  const db = await getDB();
+  await db.clear('dismissed');
 }
