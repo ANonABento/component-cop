@@ -6,7 +6,7 @@ export default defineConfig({
   manifest: {
     name: 'Component Cop',
     description: 'UI component duplication auditor for React applications',
-    permissions: ['activeTab', 'scripting', 'storage'],
+    permissions: ['activeTab', 'scripting', 'storage', 'alarms'],
     host_permissions: ['<all_urls>'],
     web_accessible_resources: [
       {

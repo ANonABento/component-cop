@@ -1,0 +1,21 @@
+/** Design tokens — dark theme matching Chrome DevTools */
+export const T = {
+  bg: '#1e1e2e',
+  bgSurface: '#262637',
+  bgHover: '#2e2e42',
+  bgActive: '#363650',
+  border: '#333348',
+  borderLight: '#2a2a3d',
+  text: '#e0e0e0',
+  textMuted: '#8b8da0',
+  textDim: '#6b6d80',
+  accent: '#818cf8',
+  accentDim: '#6366f1',
+  green: '#34d399',
+  yellow: '#fbbf24',
+  red: '#f87171',
+  orange: '#fb923c',
+  mono: "'SF Mono', 'Fira Code', 'JetBrains Mono', Menlo, monospace",
+  radius: 8,
+  radiusSm: 6,
+} as const;

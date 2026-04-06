@@ -53,7 +53,25 @@ interface CrawlerState {
 
 let crawler: CrawlerState | null = null;
 
+const KEEPALIVE_ALARM = 'component-cop-keepalive';
+
+/** Keep service worker alive during crawl by pinging every 25 seconds. */
+function startKeepalive(): void {
+  chrome.alarms.create(KEEPALIVE_ALARM, { periodInMinutes: 25 / 60 });
+}
+
+function stopKeepalive(): void {
+  chrome.alarms.clear(KEEPALIVE_ALARM);
+}
+
 export default defineBackground(() => {
+  // Keepalive alarm handler — just existing keeps the worker from sleeping
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === KEEPALIVE_ALARM) {
+      // No-op — the alarm callback itself is the keepalive
+    }
+  });
+
   // Track connected DevTools panels per tab
   const panelPorts = new Map<number, chrome.runtime.Port>();
 
@@ -621,6 +639,7 @@ export default defineBackground(() => {
       return;
     }
 
+    startKeepalive();
     crawler = {
       status: 'crawling',
       config,
@@ -655,6 +674,7 @@ export default defineBackground(() => {
   function stopCrawl(): void {
     if (!crawler) return;
     crawler.status = 'done';
+    stopKeepalive();
     broadcastCrawlProgress();
     crawler = null;
   }
@@ -674,6 +694,7 @@ export default defineBackground(() => {
     // Check limits
     if (crawler.scannedCount >= crawler.config.maxPages) {
       crawler.status = 'done';
+    stopKeepalive();
       broadcastCrawlProgress();
       crawler = null;
       return;
@@ -691,6 +712,7 @@ export default defineBackground(() => {
 
     if (!nextUrl) {
       crawler.status = 'done';
+    stopKeepalive();
       broadcastCrawlProgress();
       crawler = null;
       return;

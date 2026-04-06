@@ -104,6 +104,8 @@ function classifyColorSeverity(
  * Build a CSS variable cache for fast lookups.
  * Map of "selector → set of properties that use var()".
  */
+const COLOR_PROP_SET = new Set<string>(COLOR_PROPS);
+
 export function buildCSSVarCache(): Map<string, Set<string>> {
   const cache = new Map<string, Set<string>>();
 
@@ -114,6 +116,8 @@ export function buildCSSVarCache(): Map<string, Set<string>> {
         const propsWithVars = new Set<string>();
         for (let i = 0; i < rule.style.length; i++) {
           const prop = rule.style[i]!;
+          // Only track color-related properties — skip layout, font, etc.
+          if (!COLOR_PROP_SET.has(prop)) continue;
           const val = rule.style.getPropertyValue(prop);
           if (val.includes('var(')) propsWithVars.add(prop);
         }
@@ -135,12 +139,11 @@ function checkIfFromCSSVariable(
   cache: Map<string, Set<string>>,
 ): boolean {
   for (const [selector, varProps] of cache) {
-    if (varProps.has(prop)) {
-      try {
-        if (element.matches(selector)) return true;
-      } catch {
-        // Invalid selector, skip
-      }
+    if (!varProps.has(prop)) continue;
+    try {
+      if (element.matches(selector)) return true;
+    } catch {
+      // Invalid selector, skip
     }
   }
   return false;
