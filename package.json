@@ -1,0 +1,29 @@
+{
+  "name": "component-cop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "idb": "^8.0.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.304",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@wxt-dev/module-react": "^1.1.1",
+    "fake-indexeddb": "^6.0.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.1",
+    "wxt": "^0.20.5"
+  }
+}
