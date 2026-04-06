@@ -12,7 +12,7 @@ import type {
 } from '../shared/types';
 import { buildCSSVarCache, detectHardcodedColors } from './color-detection';
 import { computeStyleFingerprint, extractComputedStyles } from './fingerprint';
-import { getFiberFromElement, findHostElement as findHostElementShared } from './fiber-utils';
+import { getFiberFromElement, findHostElement } from './fiber-utils';
 import { generateSelector } from './selector';
 import { computeStructureHash } from './structure-hash';
 
@@ -294,8 +294,6 @@ function getScanName(fiber: Fiber): string | null {
   return name;
 }
 
-// findHostElement is in fiber-utils.ts (shared with picker)
-const findHostElement = findHostElementShared;
 
 /**
  * Sanitize React props — circular-safe, depth-limited.

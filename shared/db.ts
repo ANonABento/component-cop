@@ -133,10 +133,11 @@ export async function storePatterns(patterns: StoredPattern[]): Promise<void> {
 
 export async function clearAllData(): Promise<void> {
   const db = await getDB();
-  const tx = db.transaction(['components', 'pages', 'patterns'], 'readwrite');
+  const tx = db.transaction(['components', 'pages', 'patterns', 'dismissed'], 'readwrite');
   tx.objectStore('components').clear();
   tx.objectStore('pages').clear();
   tx.objectStore('patterns').clear();
+  tx.objectStore('dismissed').clear();
   await tx.done;
 }
 
