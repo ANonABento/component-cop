@@ -13,13 +13,13 @@ Make findings useful enough to act on without leaving the panel.
 ### 1.1 Source File Mapping
 Resolve component source locations from React fiber \`_debugSource\` and \`_debugOwner\`. Display file path + line number next to each component in the panel. This unlocks "click to open in editor" and makes every other feature more useful.
 
-### 1.2 Prop Diff View
+### 1.2 Prop Diff View ✅
 Side-by-side comparison of prop shapes across variants of the same component. Shows what's structurally different between "Button variant A" vs "Button variant B" — which props are added, removed, or changed.
 
 ### 1.3 Style Diff View ✅
 Computed style delta between variants using exact CSS values, not just fingerprint buckets. "Variant A: \`padding: 8px 16px\`, variant B: \`padding: 12px 24px\`" — the precise info needed for the fix.
 
-### 1.4 Dependency Graph
+### 1.4 Dependency Graph ✅
 Which pages/routes render which variant? Helps estimate blast radius before consolidating. Visualized as a simple table or tree in the Patterns tab.
 
 ---
@@ -28,7 +28,7 @@ Which pages/routes render which variant? Helps estimate blast radius before cons
 
 Bridge the gap from "here's what's wrong" to "here's how to fix it."
 
-### 2.1 Consolidation Suggestions
+### 2.1 Consolidation Suggestions ✅
 Generate concrete refactoring proposals: "These 3 Button variants could be unified with a \`size\` prop accepting \`sm | md | lg\`." Derived from style/prop diffs.
 
 ### 2.2 Design Token Extraction ✅
@@ -76,6 +76,6 @@ Quick scan (\`Ctrl+Shift+S\`), toggle picker (\`Ctrl+Shift+P\`), cycle patterns 
 |-------|-------|-----------|
 | 1 | 1.1, ~~1.3~~, ~~2.4~~ | Source mapping unlocks everything; style diffs ✅; triage ✅ |
 | 2 | ~~2.2~~, ~~2.3~~ | Token extraction ✅ + per-pattern prompts ✅ |
-| 3 | 1.2, 1.4, 2.1 | Prop diffs, dependency graph, and consolidation suggestions complete the analysis story |
+| 3 | ~~1.2~~, ~~1.4~~, ~~2.1~~ | Prop diffs ✅, dependency graph ✅, consolidation suggestions ✅ |
 | 4 | 3.1, 3.2, 3.3 | Tracking and CI turn it from a tool into a workflow |
 | 5 | 4.1, 4.2, 4.3 | Polish after core value is solid |

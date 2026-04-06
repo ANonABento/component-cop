@@ -6,6 +6,8 @@ import { T } from './theme';
 import { ActionButton, ClickToCopy, ColorSwatch, CountBadge, EmptyState, SectionHeader, SeverityBadge, StatCard, SearchInput } from './primitives';
 import { aggregateColorStats, extractKeyStyles, shortenPath } from './helpers';
 import { generateTokenMap, type TokenMap } from '../../lib/token-generator';
+import { computePropDiff, type PropDiffEntry } from '../../lib/prop-diff';
+import { generateConsolidationSuggestion, type ConsolidationSuggestion } from '../../lib/consolidation';
 
 export function DashboardTab({ pages, components, patterns, dismissed, onDismiss, onRestore }: {
   pages: StoredPage[];
@@ -201,9 +203,24 @@ export function DashboardTab({ pages, components, patterns, dismissed, onDismiss
                           </div>
                         );
                       })}
+                      {/* Prop Diff (only for multi-variant patterns) */}
+                      {pattern.variants.length > 1 && (
+                        <PropDiffView variants={pattern.variants} componentById={componentById} />
+                      )}
+
                       {/* Style Diff (only for multi-variant patterns) */}
                       {pattern.variants.length > 1 && (
                         <StyleDiffView variants={pattern.variants} componentById={componentById} />
+                      )}
+
+                      {/* Dependency Graph: which pages render which variant */}
+                      {pattern.variants.length > 1 && (
+                        <DependencyView variants={pattern.variants} componentById={componentById} />
+                      )}
+
+                      {/* Consolidation Suggestion */}
+                      {pattern.variants.length > 1 && (
+                        <ConsolidationBanner pattern={pattern} componentById={componentById} />
                       )}
 
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
@@ -521,6 +538,226 @@ function StyleDiffView({ variants, componentById }: {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Prop Diff View ───
+
+function PropDiffView({ variants, componentById }: {
+  variants: StoredPattern['variants'];
+  componentById: Map<number, StoredComponent>;
+}) {
+  const diffs = useMemo(() => {
+    const variantProps = new Map<string, Record<string, unknown>>();
+    for (const v of variants) {
+      const exemplar = componentById.get(v.exemplarComponentId);
+      if (exemplar?.props) variantProps.set(v.label, exemplar.props);
+    }
+    return computePropDiff(variantProps);
+  }, [variants, componentById]);
+
+  if (diffs.length === 0) return null;
+
+  const nonShared = diffs.filter((d) => d.classification !== 'shared');
+  if (nonShared.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: 8, marginBottom: 4 }}>
+      <div style={{ fontSize: 10, fontWeight: 600, color: T.textMuted, marginBottom: 6 }}>
+        Prop Differences ({nonShared.length} props)
+      </div>
+      <div style={{
+        background: T.bg, borderRadius: T.radiusSm,
+        border: `1px solid ${T.borderLight}`, overflow: 'hidden',
+      }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, fontFamily: T.mono }}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+              <th style={{ padding: '4px 8px', textAlign: 'left', color: T.textDim, fontWeight: 600 }}>Prop</th>
+              <th style={{ padding: '4px 8px', textAlign: 'left', color: T.textDim, fontWeight: 600, width: 60 }}>Type</th>
+              {variants.map((v) => (
+                <th key={v.variantId} style={{ padding: '4px 8px', textAlign: 'left', color: T.orange, fontWeight: 600 }}>
+                  {v.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {nonShared.slice(0, 15).map((diff) => (
+              <tr key={diff.key} style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+                <td style={{ padding: '3px 8px', color: T.accent }}>{diff.key}</td>
+                <td style={{ padding: '3px 8px' }}>
+                  <span style={{
+                    fontSize: 9, fontWeight: 600, padding: '1px 5px', borderRadius: 6,
+                    background: diff.classification === 'unique' ? 'rgba(248, 113, 113, 0.12)' : 'rgba(251, 191, 36, 0.12)',
+                    color: diff.classification === 'unique' ? T.red : T.yellow,
+                  }}>
+                    {diff.classification}
+                  </span>
+                </td>
+                {variants.map((v) => {
+                  const val = diff.values.get(v.label) ?? '';
+                  const shortVal = val.length > 25 ? val.slice(0, 22) + '...' : val;
+                  return (
+                    <td key={v.variantId} style={{
+                      padding: '3px 8px',
+                      color: val === '(not set)' ? T.textDim : T.text,
+                      fontStyle: val === '(not set)' ? 'italic' : 'normal',
+                    }} title={val}>
+                      {shortVal}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {nonShared.length > 15 && (
+          <div style={{ padding: '4px 8px', fontSize: 10, color: T.textDim, textAlign: 'center' }}>
+            +{nonShared.length - 15} more props
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Dependency View ───
+
+function DependencyView({ variants, componentById }: {
+  variants: StoredPattern['variants'];
+  componentById: Map<number, StoredComponent>;
+}) {
+  const pageMap = useMemo(() => {
+    const result: { label: string; pages: { path: string; count: number }[] }[] = [];
+    for (const v of variants) {
+      const pageCounts = new Map<string, number>();
+      for (const id of v.componentIds) {
+        const comp = componentById.get(id);
+        if (comp) pageCounts.set(comp.pagePath, (pageCounts.get(comp.pagePath) ?? 0) + 1);
+      }
+      result.push({
+        label: v.label,
+        pages: Array.from(pageCounts.entries())
+          .map(([path, count]) => ({ path, count }))
+          .sort((a, b) => b.count - a.count),
+      });
+    }
+    return result;
+  }, [variants, componentById]);
+
+  // Collect all unique pages across all variants
+  const allPages = useMemo(() => {
+    const set = new Set<string>();
+    for (const v of pageMap) for (const p of v.pages) set.add(p.path);
+    return Array.from(set).sort();
+  }, [pageMap]);
+
+  if (allPages.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: 8, marginBottom: 4 }}>
+      <div style={{ fontSize: 10, fontWeight: 600, color: T.textMuted, marginBottom: 6 }}>
+        Page Usage ({allPages.length} pages)
+      </div>
+      <div style={{
+        background: T.bg, borderRadius: T.radiusSm,
+        border: `1px solid ${T.borderLight}`, overflow: 'hidden',
+      }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, fontFamily: T.mono }}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+              <th style={{ padding: '4px 8px', textAlign: 'left', color: T.textDim, fontWeight: 600 }}>Page</th>
+              {pageMap.map((v) => (
+                <th key={v.label} style={{ padding: '4px 8px', textAlign: 'center', color: T.orange, fontWeight: 600 }}>
+                  {v.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {allPages.slice(0, 15).map((pagePath) => (
+              <tr key={pagePath} style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+                <td style={{ padding: '3px 8px', color: T.text, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    title={pagePath}>
+                  {shortenPath(pagePath)}
+                </td>
+                {pageMap.map((v) => {
+                  const entry = v.pages.find((p) => p.path === pagePath);
+                  return (
+                    <td key={v.label} style={{
+                      padding: '3px 8px', textAlign: 'center',
+                      color: entry ? T.green : T.textDim,
+                      fontWeight: entry ? 600 : 400,
+                    }}>
+                      {entry ? entry.count : '—'}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {allPages.length > 15 && (
+          <div style={{ padding: '4px 8px', fontSize: 10, color: T.textDim, textAlign: 'center' }}>
+            +{allPages.length - 15} more pages
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Consolidation Banner ───
+
+const EFFORT_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  low: { bg: 'rgba(52, 211, 153, 0.12)', text: T.green, label: 'Quick win' },
+  medium: { bg: 'rgba(251, 191, 36, 0.12)', text: T.yellow, label: 'Moderate' },
+  high: { bg: 'rgba(248, 113, 113, 0.12)', text: T.red, label: 'Major refactor' },
+};
+
+function ConsolidationBanner({ pattern, componentById }: {
+  pattern: StoredPattern;
+  componentById: Map<number, StoredComponent>;
+}) {
+  const suggestion = useMemo(
+    () => generateConsolidationSuggestion(pattern, componentById),
+    [pattern, componentById],
+  );
+
+  if (!suggestion) return null;
+
+  const effortStyle = EFFORT_COLORS[suggestion.effort] ?? EFFORT_COLORS.medium!;
+
+  return (
+    <div style={{
+      marginTop: 8, padding: '10px 12px',
+      background: 'rgba(129, 140, 248, 0.06)',
+      border: `1px solid ${T.accentDim}`,
+      borderRadius: T.radiusSm,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: T.accent }}>Suggestion</span>
+        <span style={{
+          fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8,
+          background: effortStyle.bg, color: effortStyle.text,
+        }}>
+          {effortStyle.label}
+        </span>
+      </div>
+      <div style={{ fontSize: 11, color: T.text, lineHeight: 1.5 }}>
+        {suggestion.suggestion}
+      </div>
+      {suggestion.propApi && (
+        <div style={{
+          marginTop: 6, padding: '4px 8px',
+          background: T.bg, borderRadius: T.radiusSm,
+          fontFamily: T.mono, fontSize: 10, color: T.accent,
+        }}>
+          {suggestion.propApi}
+        </div>
+      )}
     </div>
   );
 }
