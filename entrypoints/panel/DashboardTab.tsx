@@ -5,6 +5,7 @@ import { computeStyleDiff, type StyleDiffEntry } from '../../lib/style-diff';
 import { T } from './theme';
 import { ActionButton, ClickToCopy, ColorSwatch, CountBadge, EmptyState, SectionHeader, SeverityBadge, StatCard, SearchInput } from './primitives';
 import { aggregateColorStats, extractKeyStyles, shortenPath } from './helpers';
+import { generateTokenMap, type TokenMap } from '../../lib/token-generator';
 
 export function DashboardTab({ pages, components, patterns, dismissed, onDismiss, onRestore }: {
   pages: StoredPage[];
@@ -20,6 +21,8 @@ export function DashboardTab({ pages, components, patterns, dismissed, onDismiss
   const [expandedPattern, setExpandedPattern] = useState<string | null>(null);
   const [dashSection, setDashSection] = useState<'patterns' | 'colors'>('patterns');
   const [severityFilter, setSeverityFilter] = useState<'all' | 'inline' | 'non-tailwind' | 'tw-arbitrary'>('all');
+  const [tokenFormat, setTokenFormat] = useState<'css' | 'tailwind' | 'json'>('css');
+  const [tokenCopied, setTokenCopied] = useState(false);
 
   // Component lookup by ID for pattern variant display
   const componentById = useMemo(() => {
@@ -48,6 +51,8 @@ export function DashboardTab({ pages, components, patterns, dismissed, onDismiss
     const stats = aggregateColorStats(pages);
     return { ...stats, topColors: stats.topColors.slice(0, 30) };
   }, [pages]);
+
+  const tokenMap = useMemo(() => generateTokenMap(colorStats), [colorStats]);
 
   const filteredTopColors = useMemo(() => {
     if (severityFilter === 'all') return colorStats.topColors;
@@ -327,6 +332,93 @@ export function DashboardTab({ pages, components, patterns, dismissed, onDismiss
               </div>
             </div>
           )}
+
+          {/* Design Token Extraction */}
+          {tokenMap.tokens.length > 0 && (
+            <>
+              <div style={{ marginTop: 20 }}>
+                <SectionHeader>
+                  Proposed Design Tokens <CountBadge count={tokenMap.tokens.length} />
+                </SectionHeader>
+                <div style={{ fontSize: 11, color: T.textDim, marginBottom: 12, lineHeight: 1.5 }}>
+                  Consolidated tokens with near-duplicates merged. Copy to replace hardcoded values.
+                </div>
+              </div>
+
+              {/* Token list */}
+              <div style={{ marginBottom: 12 }}>
+                {tokenMap.tokens.slice(0, 20).map((token) => (
+                  <div key={token.name} style={{
+                    padding: '6px 12px', borderBottom: `1px solid ${T.borderLight}`,
+                    display: 'flex', alignItems: 'center', gap: 10,
+                  }}>
+                    <ColorSwatch hex={token.value} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 11, fontFamily: T.mono, color: T.accent, fontWeight: 600 }}>
+                          --{token.name}
+                        </span>
+                        <span style={{ fontSize: 10, fontFamily: T.mono, color: T.textDim }}>
+                          {token.value}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 10, color: T.textDim, marginTop: 1 }}>
+                        {token.usedAs.join(', ')}
+                        {token.merged.length > 0 && (
+                          <span style={{ color: T.yellow }}> (merges {token.merged.join(', ')})</span>
+                        )}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: T.textMuted, fontFamily: T.mono }}>
+                      {token.replacesCount}x
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Export format selector + copy */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                <select
+                  value={tokenFormat}
+                  onChange={(e) => setTokenFormat(e.target.value as typeof tokenFormat)}
+                  style={{
+                    padding: '5px 8px', borderRadius: T.radiusSm, fontSize: 10,
+                    border: `1px solid ${T.border}`, background: T.bgSurface,
+                    color: T.text, outline: 'none', fontFamily: 'inherit',
+                  }}
+                >
+                  <option value="css">CSS Variables</option>
+                  <option value="tailwind">Tailwind Config</option>
+                  <option value="json">Token JSON</option>
+                </select>
+                <ActionButton
+                  onClick={() => {
+                    const text = tokenFormat === 'css' ? tokenMap.cssVariables
+                      : tokenFormat === 'tailwind' ? tokenMap.tailwindConfig
+                      : tokenMap.tokenJson;
+                    navigator.clipboard.writeText(text).then(
+                      () => { setTokenCopied(true); setTimeout(() => setTokenCopied(false), 2000); },
+                      () => {},
+                    );
+                  }}
+                  variant="secondary"
+                  small
+                >
+                  {tokenCopied ? 'Copied!' : 'Copy'}
+                </ActionButton>
+              </div>
+
+              <div style={{
+                background: '#11111b', border: `1px solid ${T.borderLight}`,
+                borderRadius: T.radiusSm, padding: 10, fontSize: 10, fontFamily: T.mono,
+                maxHeight: 200, overflow: 'auto', whiteSpace: 'pre', color: '#a6adc8', lineHeight: 1.5,
+              }}>
+                {tokenFormat === 'css' ? tokenMap.cssVariables
+                  : tokenFormat === 'tailwind' ? tokenMap.tailwindConfig
+                  : tokenMap.tokenJson}
+              </div>
+            </>
+          )}
         </>
       )}
     </div>
@@ -452,16 +544,47 @@ function CopyPatternForLLM({ pattern, componentById }: {
       }
       if (variant.componentIds.length > 5) xml += `    <!-- ... and ${variant.componentIds.length - 5} more -->\n`;
       if (exemplar) {
+        const keyStyles = extractKeyStyles(exemplar.computedStyles);
         xml += `    <exemplar_styles>${exemplar.styleCategories.join(' | ')}</exemplar_styles>\n`;
+        xml += `    <computed_styles>\n`;
+        for (const [prop, val] of Object.entries(keyStyles)) {
+          xml += `      ${prop}: ${val}\n`;
+        }
+        xml += `    </computed_styles>\n`;
       }
       xml += '  </variant>\n';
     }
+
+    // Include style diff between variants
+    if (pattern.variants.length > 1) {
+      const variantStyles = new Map<string, Record<string, string>>();
+      for (const v of pattern.variants) {
+        const exemplar = componentById.get(v.exemplarComponentId);
+        if (exemplar) variantStyles.set(v.label, exemplar.computedStyles);
+      }
+      const diffs = computeStyleDiff(variantStyles);
+      if (diffs.length > 0) {
+        xml += `\n  <style_diff properties="${diffs.length}">\n`;
+        for (const diff of diffs.slice(0, 20)) {
+          xml += `    <property name="${diff.property}">\n`;
+          for (const [label, val] of diff.values) {
+            xml += `      ${label}: ${val}\n`;
+          }
+          xml += `    </property>\n`;
+        }
+        if (diffs.length > 20) xml += `    <!-- ... and ${diffs.length - 20} more properties -->\n`;
+        xml += `  </style_diff>\n`;
+      }
+    }
+
     xml += '</pattern_group>\n\n';
     xml += '<instructions>\n';
     xml += `Analyze the "${pattern.name}" component pattern above.\n`;
     xml += '1. Read each variant\'s source files\n';
     xml += '2. Identify the canonical variant (most instances)\n';
-    xml += '3. Generate migration code to consolidate non-canonical variants\n';
+    xml += '3. Compare the style_diff section to understand exact CSS differences\n';
+    xml += '4. Generate migration code to consolidate non-canonical variants\n';
+    xml += '5. Suggest a unified prop API if variants differ by size, color, or layout\n';
     xml += '</instructions>\n';
 
     navigator.clipboard.writeText(xml).then(

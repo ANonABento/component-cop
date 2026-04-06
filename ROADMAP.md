@@ -16,7 +16,7 @@ Resolve component source locations from React fiber \`_debugSource\` and \`_debu
 ### 1.2 Prop Diff View
 Side-by-side comparison of prop shapes across variants of the same component. Shows what's structurally different between "Button variant A" vs "Button variant B" — which props are added, removed, or changed.
 
-### 1.3 Style Diff View
+### 1.3 Style Diff View ✅
 Computed style delta between variants using exact CSS values, not just fingerprint buckets. "Variant A: \`padding: 8px 16px\`, variant B: \`padding: 12px 24px\`" — the precise info needed for the fix.
 
 ### 1.4 Dependency Graph
@@ -31,13 +31,13 @@ Bridge the gap from "here's what's wrong" to "here's how to fix it."
 ### 2.1 Consolidation Suggestions
 Generate concrete refactoring proposals: "These 3 Button variants could be unified with a \`size\` prop accepting \`sm | md | lg\`." Derived from style/prop diffs.
 
-### 2.2 Design Token Extraction
+### 2.2 Design Token Extraction ✅
 From the color audit, generate a proposed token map: \`--color-primary: #3b82f6\` replacing 4 hardcoded hex values. Exportable as CSS variables, Tailwind config, or design token JSON.
 
-### 2.3 Per-Pattern Refactor Prompts
+### 2.3 Per-Pattern Refactor Prompts ✅
 One-click "Copy for Cursor/Claude" scoped to a single pattern — includes source files, variant diffs, and a structured refactoring prompt. The existing global LLM export stays; this adds targeted per-pattern prompts.
 
-### 2.4 Ignore / Triage System
+### 2.4 Ignore / Triage System ✅
 Mark findings as "intentional" (e.g., hover states should differ) so they don't clutter repeat scans. Persisted in IndexedDB. Supports bulk dismiss and "show ignored" toggle.
 
 ---
@@ -74,8 +74,8 @@ Quick scan (\`Ctrl+Shift+S\`), toggle picker (\`Ctrl+Shift+P\`), cycle patterns 
 
 | Phase | Items | Why first |
 |-------|-------|-----------|
-| 1 | 1.1, 1.3, 2.4 | Source mapping unlocks everything; style diffs make patterns actionable; triage makes repeated use practical |
-| 2 | 2.2, 2.3 | Token extraction + per-pattern prompts are the highest-value "fix it" features |
+| 1 | 1.1, ~~1.3~~, ~~2.4~~ | Source mapping unlocks everything; style diffs ✅; triage ✅ |
+| 2 | ~~2.2~~, ~~2.3~~ | Token extraction ✅ + per-pattern prompts ✅ |
 | 3 | 1.2, 1.4, 2.1 | Prop diffs, dependency graph, and consolidation suggestions complete the analysis story |
 | 4 | 3.1, 3.2, 3.3 | Tracking and CI turn it from a tool into a workflow |
 | 5 | 4.1, 4.2, 4.3 | Polish after core value is solid |
