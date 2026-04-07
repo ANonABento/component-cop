@@ -9,7 +9,12 @@ declare module "wxt/browser" {
     | "/content-scripts/content.js"
     | "/devtools.html"
     | "/icon-128.png"
+    | "/icon-16.png"
+    | "/icon-32.png"
+    | "/icon-48.png"
+    | "/icon.svg"
     | "/injected.js"
+    | "/options.html"
     | "/panel.html"
   type HtmlPublicPath = Extract<PublicPath, `${string}.html`>
   export interface WxtRuntime {

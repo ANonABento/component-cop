@@ -59,13 +59,13 @@ Export scan results as JSON from a headless run. Provide a GitHub Action that fa
 
 ## Tier 4: Polish
 
-### 4.1 Custom Icon / Branding
+### 4.1 Custom Icon / Branding ✅
 Police badge or magnifying glass icon for the extension and DevTools panel tab.
 
-### 4.2 Options Page
+### 4.2 Options Page ✅
 Configure similarity thresholds, exclude patterns, color distance sensitivity, max crawl depth. Currently these are hardcoded constants.
 
-### 4.3 Keyboard Shortcuts
+### 4.3 Keyboard Shortcuts ✅
 Quick scan (\`Ctrl+Shift+S\`), toggle picker (\`Ctrl+Shift+P\`), cycle patterns (\`Ctrl+Shift+N/P\`).
 
 ---
@@ -78,4 +78,4 @@ Quick scan (\`Ctrl+Shift+S\`), toggle picker (\`Ctrl+Shift+P\`), cycle patterns 
 | 2 | ~~2.2~~, ~~2.3~~ | Token extraction ✅ + per-pattern prompts ✅ |
 | 3 | ~~1.2~~, ~~1.4~~, ~~2.1~~ | Prop diffs ✅, dependency graph ✅, consolidation suggestions ✅ |
 | 4 | ~~3.1~~, ~~3.2~~, ~~3.3~~ | Tracking ✅ and CI ✅ turn it from a tool into a workflow |
-| 5 | 4.1, 4.2, 4.3 | Polish after core value is solid |
+| 5 | ~~4.1~~, ~~4.2~~, ~~4.3~~ | Polish ✅ — all phases complete |

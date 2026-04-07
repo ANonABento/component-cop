@@ -871,6 +871,25 @@ export default defineBackground(() => {
     }
   });
 
+
+  // ─── Keyboard shortcut commands ───
+  chrome.commands.onCommand.addListener((command) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const tabId = tabs[0]?.id;
+      if (!tabId) return;
+
+      switch (command) {
+        case 'trigger-scan':
+          injectAndScan(tabId);
+          break;
+        case 'toggle-picker':
+          chrome.tabs.sendMessage(tabId, { type: 'ENTER_PICKER_MODE' }).catch(() => {
+            // Content script not loaded yet — ignore
+          });
+          break;
+      }
+    });
+  });
   // Initialize DB schema on install
   chrome.runtime.onInstalled.addListener(() => {
     // The DB will be initialized on first access via getDB()
