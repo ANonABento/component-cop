@@ -1,8 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { ComponentData, ReactDetectionResult, ScanResult } from '../../shared/types';
 import { T } from './theme';
-import { ActionButton, EmptyState, SearchInput, Spinner } from './primitives';
-import { shortenPath } from './helpers';
+import { ActionButton, EmptyState, SearchInput, SourceLink, Spinner } from './primitives';
 
 export function ScanTab({ onScan, scanning, lastScan, reactStatus }: {
   onScan: () => void; scanning: boolean; lastScan: ScanResult | null; reactStatus: ReactDetectionResult | null;
@@ -95,37 +94,35 @@ function ComponentTable({ components }: { components: ComponentData[] }) {
 
       <div style={{ maxHeight: 400, overflow: 'auto' }}>
         {components.map((comp, i) => {
-          const source = comp.sourceFile
-            ? `${shortenPath(comp.sourceFile)}:${comp.sourceLine}`
-            : 'unknown';
           const isCopied = copiedIdx === i;
+          const sourceStr = comp.sourceFile
+            ? `${comp.sourceFile}:${comp.sourceLine ?? '?'}`
+            : 'unknown';
 
           return (
             <div
               key={`${comp.componentName}-${comp.domSelector}-${i}`}
-              onClick={() => handleCopyRow(`${comp.componentName} ${source}`, i)}
               style={{
                 display: 'grid', gridTemplateColumns: '2fr 2fr 80px',
                 padding: '7px 12px', borderBottom: `1px solid ${T.borderLight}`,
-                cursor: 'pointer', transition: 'background 0.1s',
+                transition: 'background 0.1s',
                 background: isCopied ? 'rgba(99,102,241,0.1)' : 'transparent',
               }}
               onMouseEnter={(e) => { if (!isCopied) e.currentTarget.style.background = T.bgHover; }}
               onMouseLeave={(e) => { if (!isCopied) e.currentTarget.style.background = 'transparent'; }}
-              title="Click to copy"
             >
-              <span style={{
-                fontSize: 12, fontWeight: 500, color: T.text, fontFamily: T.mono,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>
-                {comp.componentName}
+              <span
+                onClick={() => handleCopyRow(`${comp.componentName} ${sourceStr}`, i)}
+                title="Click to copy"
+                style={{
+                  fontSize: 12, fontWeight: 500, color: T.text, fontFamily: T.mono,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  cursor: 'pointer',
+                }}
+              >
+                {isCopied ? <span style={{ color: T.green }}>Copied!</span> : comp.componentName}
               </span>
-              <span style={{
-                fontSize: 11, color: isCopied ? T.green : T.textDim, fontFamily: T.mono,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>
-                {isCopied ? 'Copied!' : source}
-              </span>
+              <SourceLink file={comp.sourceFile} line={comp.sourceLine} column={comp.sourceColumn} />
               <span style={{ fontSize: 11, color: T.textDim, textAlign: 'right', fontFamily: T.mono }}>
                 {Math.round(comp.boundingRect.width)}x{Math.round(comp.boundingRect.height)}
               </span>

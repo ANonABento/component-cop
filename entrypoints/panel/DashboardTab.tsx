@@ -3,8 +3,8 @@ import type { StoredComponent, StoredPage, StoredPattern, PatternVariant } from 
 import { variantLabel } from '../../shared/variant-label';
 import { computeStyleDiff, type StyleDiffEntry } from '../../lib/style-diff';
 import { T } from './theme';
-import { ActionButton, ClickToCopy, ColorSwatch, CountBadge, EmptyState, SectionHeader, SeverityBadge, StatCard, SearchInput } from './primitives';
-import { aggregateColorStats, extractKeyStyles, shortenPath } from './helpers';
+import { ActionButton, ClickToCopy, ColorSwatch, CountBadge, EmptyState, SectionHeader, SeverityBadge, SourceLink, StatCard, SearchInput } from './primitives';
+import { aggregateColorStats, extractKeyStyles } from './helpers';
 import { generateTokenMap, type TokenMap } from '../../lib/token-generator';
 import { computePropDiff, type PropDiffEntry } from '../../lib/prop-diff';
 import { generateConsolidationSuggestion, type ConsolidationSuggestion } from '../../lib/consolidation';
@@ -190,12 +190,9 @@ export function DashboardTab({ pages, components, patterns, dismissed, onDismiss
                               </span>
                             </div>
                             {exemplar && (
-                              <div style={{ fontSize: 10, color: T.textDim, marginTop: 4, fontFamily: T.mono }}>
-                                <ClickToCopy text={exemplar.sourceFile
-                                  ? `${shortenPath(exemplar.sourceFile)}:${exemplar.sourceLine}`
-                                  : exemplar.domSelector
-                                } />
-                                <span style={{ marginLeft: 8 }}>
+                              <div style={{ fontSize: 10, color: T.textDim, marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <SourceLink file={exemplar.sourceFile} line={exemplar.sourceLine} column={exemplar.sourceColumn} />
+                                <span style={{ fontFamily: T.mono }}>
                                   {exemplar.styleCategories.slice(0, 4).join(' | ')}
                                 </span>
                               </div>

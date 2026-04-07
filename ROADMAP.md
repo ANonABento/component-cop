@@ -10,7 +10,7 @@ Audit-only: scans React fiber trees, fingerprints components, clusters duplicate
 
 Make findings useful enough to act on without leaving the panel.
 
-### 1.1 Source File Mapping
+### 1.1 Source File Mapping ✅
 Resolve component source locations from React fiber \`_debugSource\` and \`_debugOwner\`. Display file path + line number next to each component in the panel. This unlocks "click to open in editor" and makes every other feature more useful.
 
 ### 1.2 Prop Diff View ✅
@@ -74,7 +74,7 @@ Quick scan (\`Ctrl+Shift+S\`), toggle picker (\`Ctrl+Shift+P\`), cycle patterns 
 
 | Phase | Items | Why first |
 |-------|-------|-----------|
-| 1 | 1.1, ~~1.3~~, ~~2.4~~ | Source mapping unlocks everything; style diffs ✅; triage ✅ |
+| 1 | ~~1.1~~, ~~1.3~~, ~~2.4~~ | Source mapping ✅ unlocks everything; style diffs ✅; triage ✅ |
 | 2 | ~~2.2~~, ~~2.3~~ | Token extraction ✅ + per-pattern prompts ✅ |
 | 3 | ~~1.2~~, ~~1.4~~, ~~2.1~~ | Prop diffs ✅, dependency graph ✅, consolidation suggestions ✅ |
 | 4 | ~~3.1~~, ~~3.2~~, ~~3.3~~ | Tracking ✅ and CI ✅ turn it from a tool into a workflow |

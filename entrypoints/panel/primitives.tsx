@@ -244,3 +244,46 @@ export function SeverityBadge({ severity }: { severity: string }) {
     </span>
   );
 }
+
+/**
+ * Clickable source location that opens in VS Code / Cursor.
+ * Falls back to displaying the path as text if no editor protocol is available.
+ */
+export function SourceLink({ file, line, column }: {
+  file: string | null;
+  line: number | null;
+  column?: number | null;
+}) {
+  if (!file) return <span style={{ fontSize: 11, color: T.textDim, fontFamily: T.mono }}>unknown</span>;
+
+  // Shorten webpack/vite paths: strip everything before src/ or app/
+  const display = file.replace(/^.*?(?=(?:src|app|components|pages|lib)\/)/, '');
+  const lineStr = line ? `:${line}` : '';
+  const colStr = column ? `:${column}` : '';
+  const label = `${display}${lineStr}`;
+
+  // VS Code URI: vscode://file/path:line:column
+  const editorUri = `vscode://file/${file}${lineStr}${colStr}`;
+
+  return (
+    <a
+      href={editorUri}
+      title={`Open ${file}${lineStr}${colStr} in editor`}
+      onClick={(e) => {
+        // Try opening via the URI scheme
+        e.preventDefault();
+        window.open(editorUri, '_blank');
+      }}
+      style={{
+        fontSize: 11, color: T.accent, fontFamily: T.mono,
+        textDecoration: 'none', cursor: 'pointer',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        display: 'inline-block', maxWidth: '100%',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none'; }}
+    >
+      {label}
+    </a>
+  );
+}

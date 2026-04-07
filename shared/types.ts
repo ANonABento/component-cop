@@ -13,6 +13,7 @@ export interface Fiber {
     lineNumber: number;
     columnNumber?: number;
   } | null;
+  _debugOwner?: Fiber | null;
 }
 
 export type FiberType =
@@ -50,6 +51,7 @@ export interface ComponentData {
   componentName: string;
   sourceFile: string | null;
   sourceLine: number | null;
+  sourceColumn: number | null;
   domSelector: string;
   pagePath: string;
   pageTitle: string;

@@ -348,6 +348,25 @@ export function sanitizeProps(
 }
 
 /**
+ * Resolve source location from fiber.
+ * Tries _debugSource first, then walks up _debugOwner chain (max 5 levels).
+ */
+function resolveSource(fiber: Fiber): { fileName: string; lineNumber: number; columnNumber?: number } | null {
+  if (fiber._debugSource) return fiber._debugSource;
+
+  // Walk _debugOwner chain — parent component may have source when wrapper doesn't
+  let owner = fiber._debugOwner;
+  let depth = 0;
+  while (owner && depth < 5) {
+    if (owner._debugSource) return owner._debugSource;
+    owner = owner._debugOwner;
+    depth++;
+  }
+
+  return null;
+}
+
+/**
  * Scan the current page. Walks all fiber roots, extracts component data.
  */
 export function scanPage(sessionId: string, options?: ScanOptions): ScanResult {
@@ -409,8 +428,9 @@ export function scanPage(sessionId: string, options?: ScanOptions): ScanResult {
 
       components.push({
         componentName,
-        sourceFile: fiber._debugSource?.fileName ?? null,
-        sourceLine: fiber._debugSource?.lineNumber ?? null,
+        sourceFile: resolveSource(fiber)?.fileName ?? null,
+        sourceLine: resolveSource(fiber)?.lineNumber ?? null,
+        sourceColumn: resolveSource(fiber)?.columnNumber ?? null,
         domSelector: generateSelector(element),
         pagePath,
         pageTitle,

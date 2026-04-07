@@ -2,8 +2,8 @@ import { useCallback, useMemo, useState } from 'react';
 import type { ReactDetectionResult, SimilarityMatch } from '../../shared/types';
 import { EXACT_MATCH_THRESHOLD, STRONG_MATCH_THRESHOLD } from '../../shared/constants';
 import { T } from './theme';
-import { ActionButton, ClickToCopy, CountBadge, EmptyState, PulsingDot, SectionHeader } from './primitives';
-import { extractKeyStyles, shortenPath } from './helpers';
+import { ActionButton, ClickToCopy, CountBadge, EmptyState, PulsingDot, SectionHeader , SourceLink} from './primitives';
+import { extractKeyStyles } from './helpers';
 
 interface PickerResult {
   component: import('../../shared/types').ComponentData;
@@ -186,10 +186,7 @@ export function PickerTab({ onPick, onCancel, picking, result, reactStatus, navS
                   &lt;{result.component.componentName}&gt;
                 </span>
                 <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                  <ClickToCopy text={result.component.sourceFile
-                    ? `${shortenPath(result.component.sourceFile)}:${result.component.sourceLine}`
-                    : 'source unknown'
-                  } />
+                  <SourceLink file={result.component.sourceFile} line={result.component.sourceLine} column={result.component.sourceColumn} />
                   <span>{Math.round(result.component.boundingRect.width)}x{Math.round(result.component.boundingRect.height)}</span>
                   <span>{result.component.pagePath}</span>
                 </div>
@@ -295,9 +292,7 @@ function MatchRow({ match }: { match: SimilarityMatch }) {
           {match.component.componentName}
         </span>
         <div style={{ fontSize: 10, color: T.textDim, marginTop: 2 }}>
-          <ClickToCopy text={match.component.sourceFile
-            ? `${shortenPath(match.component.sourceFile)}:${match.component.sourceLine}` : 'unknown'
-          } />
+          <SourceLink file={match.component.sourceFile} line={match.component.sourceLine} column={match.component.sourceColumn} />
           <span style={{ marginLeft: 8 }}>{match.component.pagePath}</span>
         </div>
       </div>
