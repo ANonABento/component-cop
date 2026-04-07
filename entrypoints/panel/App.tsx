@@ -5,7 +5,7 @@ import type {
 } from '../../shared/messages';
 import type { CrawlConfig, CrawlProgress, DismissedPattern, ReactDetectionResult, ScanResult, StoredComponent, StoredPage, StoredPattern } from '../../shared/types';
 import { T } from './theme';
-import { MiniStat, ReactBadge, TabButton } from './primitives';
+import { HoverButton, MiniStat, ReactBadge, TabButton } from './primitives';
 import { sendMsg } from './helpers';
 import { ScanTab } from './ScanTab';
 import { PickerTab, type PickerResult } from './PickerTab';
@@ -172,6 +172,11 @@ export function App() {
       sendMsg(port, { type: 'GET_PATTERNS' });
       sendMsg(port, { type: 'GET_DISMISSED' });
       sendMsg(port, { type: 'GET_SNAPSHOTS' });
+
+      // Load persisted baseline
+      chrome.storage.local.get('baselineId').then((result) => {
+        if (result.baselineId != null) setBaselineId(result.baselineId);
+      }).catch(() => {});
     }
 
     connect();
@@ -395,8 +400,8 @@ export function App() {
             baselineId={baselineId}
             onSave={(label) => { if (portRef.current) sendMsg(portRef.current, { type: 'SAVE_SNAPSHOT', label }); }}
             onDelete={(id) => { if (portRef.current) sendMsg(portRef.current, { type: 'DELETE_SNAPSHOT', id }); }}
-            onSetBaseline={(id) => setBaselineId(id)}
-            onClearBaseline={() => setBaselineId(null)}
+            onSetBaseline={(id) => { setBaselineId(id); chrome.storage.local.set({ baselineId: id }); }}
+            onClearBaseline={() => { setBaselineId(null); chrome.storage.local.remove('baselineId'); }}
           />
         )}
       </div>

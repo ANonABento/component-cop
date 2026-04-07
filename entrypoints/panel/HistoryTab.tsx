@@ -217,7 +217,7 @@ function TrendView({ snapshots }: { snapshots: ScanSnapshot[] }) {
             <div style={{ fontSize: 10, color: T.textDim, marginBottom: 3 }}>{metric.label}</div>
             <div style={{ display: 'flex', alignItems: 'end', gap: 2, height: 32 }}>
               {values.map((val, i) => (
-                <div key={i} title={`${recent[i]!.label}: ${val}`} style={{
+                <div key={recent[i]!.id} title={`${recent[i]!.label}: ${val}`} style={{
                   flex: 1, background: metric.color,
                   height: `${Math.max(2, (val / max) * 100)}%`,
                   borderRadius: '2px 2px 0 0', opacity: 0.7,

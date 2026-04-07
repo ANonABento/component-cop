@@ -1,4 +1,4 @@
-import { parseRGB as parseRGBShared } from '../shared/color-utils';
+import { parseRGB } from '../shared/color-utils';
 import { STYLE_PROPERTIES } from '../shared/constants';
 import { simpleHash } from '../shared/hash';
 
@@ -151,21 +151,7 @@ function spacingBucket(top: string, right: string, bottom: string, left: string)
   return 'wide';
 }
 
-// ─── Color parsing helpers ───
 
-function parseRGB(value: string): [number, number, number] | null {
-  // Comma-separated: rgb(r, g, b) or rgba(r, g, b, a)
-  const commaMatch = value.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
-  if (commaMatch) {
-    return [Number(commaMatch[1]), Number(commaMatch[2]), Number(commaMatch[3])];
-  }
-  // Space-separated (modern): rgb(r g b) or rgb(r g b / a)
-  const spaceMatch = value.match(/rgba?\(\s*(\d+)\s+(\d+)\s+(\d+)/);
-  if (spaceMatch) {
-    return [Number(spaceMatch[1]), Number(spaceMatch[2]), Number(spaceMatch[3])];
-  }
-  return null;
-}
 
 function rgbToHue(r: number, g: number, b: number): number {
   const rn = r / 255;

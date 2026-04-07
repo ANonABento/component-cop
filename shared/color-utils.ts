@@ -14,7 +14,8 @@ export function parseRGB(value: string): [number, number, number] | null {
  * Convert a hex color string to [r, g, b] tuple.
  */
 export function hexToRGB(hex: string): [number, number, number] | null {
-  const clean = hex.replace('#', '');
+  let clean = hex.replace('#', '');
+  if (clean.length === 3) clean = clean[0]! + clean[0]! + clean[1]! + clean[1]! + clean[2]! + clean[2]!;
   if (clean.length !== 6) return null;
   return [
     parseInt(clean.slice(0, 2), 16),

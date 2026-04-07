@@ -68,6 +68,7 @@ export function ScanTab({ onScan, scanning, lastScan, reactStatus }: {
 }
 
 function ComponentTable({ components }: { components: ComponentData[] }) {
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 
   const handleCopyRow = useCallback((text: string, idx: number) => {
     navigator.clipboard.writeText(text).then(() => {

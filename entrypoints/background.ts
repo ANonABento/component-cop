@@ -14,6 +14,10 @@ import {
   saveSnapshot,
   getAllSnapshots,
   deleteSnapshot,
+  dismissPattern,
+  restorePattern,
+  getDismissedPatterns,
+  clearDismissed,
 } from '../shared/db';
 import type { ScanSnapshot } from '../shared/scan-history';
 import { SIMILARITY_THRESHOLD } from '../shared/constants';
@@ -53,9 +57,11 @@ interface CrawlerState {
   currentUrl: string | null;
   errors: string[];
   origin: string;  // restrict crawl to same origin
+  currentScanId: number;  // monotonic ID for timeout/completion race prevention
 }
 
 let crawler: CrawlerState | null = null;
+let pendingGotoListener: ((tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => void) | null = null;
 
 const KEEPALIVE_ALARM = 'component-cop-keepalive';
 
@@ -719,6 +725,7 @@ export default defineBackground(() => {
       currentUrl: null,
       errors: [],
       origin,
+      currentScanId: 0,
     };
 
     broadcastCrawlProgress();
@@ -867,6 +874,7 @@ export default defineBackground(() => {
   // Stop crawling if the tab is closed
   chrome.tabs.onRemoved.addListener((tabId) => {
     if (crawler && crawler.tabId === tabId) {
+      stopKeepalive();
       crawler = null;
     }
   });
@@ -880,7 +888,9 @@ export default defineBackground(() => {
 
       switch (command) {
         case 'trigger-scan':
-          injectAndScan(tabId);
+          chrome.tabs.sendMessage(tabId, { type: 'START_SCAN' }).catch(() => {
+            // Content script not loaded — ignore
+          });
           break;
         case 'toggle-picker':
           chrome.tabs.sendMessage(tabId, { type: 'ENTER_PICKER_MODE' }).catch(() => {

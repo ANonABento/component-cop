@@ -33,8 +33,9 @@ describe('hexToRGB', () => {
     expect(hexToRGB('ff0080')).toEqual([255, 0, 128]);
   });
 
-  it('returns null for short hex', () => {
-    expect(hexToRGB('#fff')).toBeNull();
+  it('returns null for 1-2 char hex', () => {
+    expect(hexToRGB('#f')).toBeNull();
+    expect(hexToRGB('#ff')).toBeNull();
   });
 });
 

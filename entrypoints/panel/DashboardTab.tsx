@@ -442,32 +442,7 @@ export function DashboardTab({ pages, components, patterns, dismissed, onDismiss
   );
 }
 
-function ColorSwatch({ hex }: { hex: string }) {
-  return (
-    <span style={{
-      display: 'inline-block', width: 16, height: 16, borderRadius: 4,
-      background: hex, border: '1px solid rgba(255,255,255,0.15)', flexShrink: 0,
-    }} />
-  );
-}
 
-const SEVERITY_COLORS: Record<string, { bg: string; text: string }> = {
-  inline: { bg: 'rgba(248, 113, 113, 0.12)', text: T.red },
-  'non-tailwind': { bg: 'rgba(251, 191, 36, 0.12)', text: T.yellow },
-  'tw-arbitrary': { bg: 'rgba(129, 140, 248, 0.12)', text: T.accent },
-};
-
-function SeverityBadge({ severity }: { severity: string }) {
-  const colors = SEVERITY_COLORS[severity] ?? { bg: 'rgba(255,255,255,0.06)', text: T.textDim };
-  return (
-    <span style={{
-      fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8,
-      background: colors.bg, color: colors.text, whiteSpace: 'nowrap',
-    }}>
-      {severity}
-    </span>
-  );
-}
 
 
 // ─── Style Diff View ───

@@ -4,7 +4,7 @@
  */
 
 import type { StoredComponent, StoredPattern } from '../shared/types';
-import { computePropDiff, type PropDiffEntry } from './prop-diff';
+import { computePropDiff } from './prop-diff';
 import { computeStyleDiff, type StyleDiffEntry } from './style-diff';
 
 export interface ConsolidationSuggestion {
