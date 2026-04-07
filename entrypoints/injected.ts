@@ -33,7 +33,7 @@ export default defineUnlistedScript(() => {
 
     switch (msg.type) {
       case 'START_SCAN': {
-        const result = scanPage(generateSessionId());
+        const result = scanPage(generateSessionId(), msg.options);
         sendToContent({ type: 'SCAN_RESULT', payload: result });
         break;
       }

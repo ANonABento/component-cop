@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CrawlConfig, CrawlProgress, ReactDetectionResult, StoredPage } from '../../shared/types';
 import { DEFAULT_CRAWL_CONFIG } from '../../shared/constants';
+import { loadOptions } from '../../shared/options';
 import { T } from './theme';
 import { ActionButton, EmptyState, PulsingDot, SectionHeader, StatCard } from './primitives';
 
@@ -16,6 +17,15 @@ export function CrawlTab({ onStart, onPause, onResume, onStop, progress, reactSt
   const [maxPages, setMaxPages] = useState(DEFAULT_CRAWL_CONFIG.maxPages);
   const [delay, setDelay] = useState(DEFAULT_CRAWL_CONFIG.delayMs);
   const [excludeInput, setExcludeInput] = useState(DEFAULT_CRAWL_CONFIG.excludePatterns.join(', '));
+
+  // Load user options to override defaults
+  useEffect(() => {
+    loadOptions().then((opts) => {
+      setMaxPages(opts.maxCrawlPages);
+      setDelay(opts.crawlDelayMs);
+      setExcludeInput(opts.excludePatterns.join(', '));
+    }).catch(() => {});
+  }, []);
 
   const isCrawling = progress?.status === 'crawling';
   const isPaused = progress?.status === 'paused';

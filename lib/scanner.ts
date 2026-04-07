@@ -1,5 +1,6 @@
 import { DEFAULT_CRAWL_CONFIG, MIN_ELEMENT_SIZE, SKIP_COMPONENT_NAMES, SKIP_FIBER_TAGS } from '../shared/constants';
 import { isExcluded } from '../shared/url-utils';
+import type { ScanOptions } from '../shared/messages';
 import type {
   ComponentData,
   Fiber,
@@ -285,11 +286,12 @@ export function getComponentName(fiber: Fiber): string {
 /**
  * Check if a fiber should be scanned. Returns the component name if scannable, null otherwise.
  */
-function getScanName(fiber: Fiber): string | null {
+function getScanName(fiber: Fiber, extraSkipNames?: Set<string>): string | null {
   if (SKIP_FIBER_TAGS.has(fiber.tag)) return null;
 
   const name = getComponentName(fiber);
   if (SKIP_COMPONENT_NAMES.has(name)) return null;
+  if (extraSkipNames?.has(name)) return null;
 
   return name;
 }
@@ -348,11 +350,14 @@ export function sanitizeProps(
 /**
  * Scan the current page. Walks all fiber roots, extracts component data.
  */
-export function scanPage(sessionId: string): ScanResult {
+export function scanPage(sessionId: string, options?: ScanOptions): ScanResult {
   const reactInfo = detectReact();
   const pagePath = location.pathname;
   const pageTitle = document.title;
   const pageUrl = location.href;
+  const extraSkipNames = options?.skipComponents?.length
+    ? new Set(options.skipComponents)
+    : undefined;
 
   if (!reactInfo.found) {
     return {
@@ -360,7 +365,7 @@ export function scanPage(sessionId: string): ScanResult {
       pageTitle,
       pageUrl,
       components: [],
-      links: discoverLinks(),
+      links: discoverLinks(options?.excludePatterns),
       reactInfo,
       hardcodedColors: [],
     };
@@ -374,7 +379,7 @@ export function scanPage(sessionId: string): ScanResult {
 
   for (const root of roots) {
     walkFiberTree(root.current, (fiber) => {
-      const componentName = getScanName(fiber);
+      const componentName = getScanName(fiber, extraSkipNames);
       if (!componentName) return false;
 
       const element = findHostElement(fiber);
@@ -431,7 +436,7 @@ export function scanPage(sessionId: string): ScanResult {
     pageTitle,
     pageUrl,
     components,
-    links: discoverLinks(),
+    links: discoverLinks(options?.excludePatterns),
     reactInfo,
     hardcodedColors,
   };
@@ -451,11 +456,11 @@ function serializeQuick(el: HTMLElement, depth = 0): string {
  * Discover same-origin navigable links on the page.
  * Uses the same exclude patterns as the crawler config (single source of truth).
  */
-function discoverLinks(): string[] {
+function discoverLinks(customExcludePatterns?: string[]): string[] {
   const links = new Set<string>();
   const anchors = document.querySelectorAll('a[href]');
   const origin = location.origin;
-  const excludePatterns = DEFAULT_CRAWL_CONFIG.excludePatterns;
+  const excludePatterns = customExcludePatterns ?? DEFAULT_CRAWL_CONFIG.excludePatterns;
 
   for (const a of anchors) {
     const href = (a as HTMLAnchorElement).href;

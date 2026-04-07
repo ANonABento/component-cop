@@ -20,7 +20,7 @@ import {
   clearDismissed,
 } from '../shared/db';
 import type { ScanSnapshot } from '../shared/scan-history';
-import { SIMILARITY_THRESHOLD } from '../shared/constants';
+import { loadOptions, type ComponentCopOptions } from '../shared/options';
 import { computeSimilarity } from '../shared/similarity';
 import { findNearDuplicateColors } from '../lib/color-distance';
 import { variantLabel } from '../shared/variant-label';
@@ -61,6 +61,20 @@ interface CrawlerState {
 }
 
 let crawler: CrawlerState | null = null;
+let cachedOptions: ComponentCopOptions | null = null;
+
+async function getOptions(): Promise<ComponentCopOptions> {
+  if (!cachedOptions) cachedOptions = await loadOptions();
+  return cachedOptions;
+}
+
+// Invalidate cache when options change
+try {
+  chrome.storage.sync.onChanged.addListener(() => { cachedOptions = null; });
+} catch {
+  // storage.sync may not be available in all contexts
+}
+
 let pendingGotoListener: ((tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => void) | null = null;
 
 const KEEPALIVE_ALARM = 'component-cop-keepalive';
@@ -239,7 +253,8 @@ export default defineBackground(() => {
       case 'TRIGGER_SCAN': {
         // Tell content script to trigger scan in injected script
         try {
-          await chrome.tabs.sendMessage(msg.tabId, { type: 'START_SCAN' });
+          const scanOpts = await getOptions();
+          await chrome.tabs.sendMessage(msg.tabId, { type: 'START_SCAN', options: { skipComponents: scanOpts.skipComponents, excludePatterns: scanOpts.excludePatterns } });
         } catch {
           console.warn('[component-cop bg] Failed to send START_SCAN — tab or content script unavailable');
         }
@@ -515,6 +530,7 @@ export default defineBackground(() => {
     structureHash: string,
     componentName?: string,
   ): Promise<SimilarityMatch[]> {
+    const options = await getOptions();
     const allComponents = await getAllComponents();
     const matches: SimilarityMatch[] = [];
 
@@ -528,7 +544,7 @@ export default defineBackground(() => {
         comp.componentName,
       );
 
-      if (score >= SIMILARITY_THRESHOLD) {
+      if (score >= options.similarityThreshold) {
         matches.push({ component: comp, score, styleScore, structureScore });
       }
     }
@@ -540,7 +556,7 @@ export default defineBackground(() => {
 
   // ─── Color summary computation ───
 
-  function buildColorSummary(colors: HardcodedColor[]): ColorSummary | null {
+  function buildColorSummary(colors: HardcodedColor[], colorDistanceThreshold: number): ColorSummary | null {
     if (colors.length === 0) return null;
 
     const byHex = new Map<string, { count: number; usedAs: Set<string>; severities: Set<HardcodedColor['severity']> }>();
@@ -565,7 +581,7 @@ export default defineBackground(() => {
       .slice(0, 20);
 
     const uniqueHexes = Array.from(byHex.keys());
-    const nearDuplicates = findNearDuplicateColors(uniqueHexes, 5);
+    const nearDuplicates = findNearDuplicateColors(uniqueHexes, colorDistanceThreshold);
 
     return {
       uniqueColors: byHex.size,
@@ -888,8 +904,8 @@ export default defineBackground(() => {
 
       switch (command) {
         case 'trigger-scan':
-          chrome.tabs.sendMessage(tabId, { type: 'START_SCAN' }).catch(() => {
-            // Content script not loaded — ignore
+          getOptions().then((opts) => {
+            chrome.tabs.sendMessage(tabId, { type: 'START_SCAN', options: { skipComponents: opts.skipComponents, excludePatterns: opts.excludePatterns } }).catch(() => {});
           });
           break;
         case 'toggle-picker':

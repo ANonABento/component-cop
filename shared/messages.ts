@@ -20,8 +20,13 @@ export type InjectedToContentMessage =
 
 // ─── Content Script → Injected Script (via window.postMessage) ───
 
+export interface ScanOptions {
+  skipComponents?: string[];
+  excludePatterns?: string[];
+}
+
 export type ContentToInjectedMessage =
-  | { type: 'START_SCAN' }
+  | { type: 'START_SCAN'; options?: ScanOptions }
   | { type: 'ENTER_PICKER_MODE' }
   | { type: 'EXIT_PICKER_MODE' }
   | { type: 'NAVIGATE_SIMILAR'; payload: { componentName: string; styleCategories: string[]; structureHash: string } }
