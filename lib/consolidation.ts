@@ -42,7 +42,6 @@ export function generateConsolidationSuggestion(
   const styleDiffs = computeStyleDiff(variantStyles);
 
   const uniqueProps = propDiffs.filter((d) => d.classification === 'unique');
-  const variedProps = propDiffs.filter((d) => d.classification === 'varied');
 
   const drivers: string[] = [];
   let suggestion = '';

@@ -417,6 +417,7 @@ function buildComponentDataFromFiber(fiber: Fiber, element: HTMLElement): Compon
     componentName,
     sourceFile: fiber._debugSource?.fileName ?? null,
     sourceLine: fiber._debugSource?.lineNumber ?? null,
+        sourceColumn: fiber._debugSource?.columnNumber ?? null,
     domSelector: generateSelector(element),
     pagePath: location.pathname,
     pageTitle: document.title,

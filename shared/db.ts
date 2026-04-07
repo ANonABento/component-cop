@@ -160,7 +160,7 @@ export async function clearAllData(): Promise<void> {
 
 export async function saveSnapshot(snapshot: Omit<ScanSnapshot, 'id'>): Promise<number> {
   const db = await getDB();
-  return db.add('snapshots', snapshot as ScanSnapshot);
+  return db.add('snapshots', snapshot as ScanSnapshot) as Promise<number>;
 }
 
 export async function getAllSnapshots(): Promise<ScanSnapshot[]> {

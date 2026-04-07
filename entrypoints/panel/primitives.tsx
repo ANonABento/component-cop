@@ -269,11 +269,7 @@ export function SourceLink({ file, line, column }: {
     <a
       href={editorUri}
       title={`Open ${file}${lineStr}${colStr} in editor`}
-      onClick={(e) => {
-        // Try opening via the URI scheme
-        e.preventDefault();
-        window.open(editorUri, '_blank');
-      }}
+      // Native <a href> handles vscode:// protocol in Chrome
       style={{
         fontSize: 11, color: T.accent, fontFamily: T.mono,
         textDecoration: 'none', cursor: 'pointer',

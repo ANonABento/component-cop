@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   BackgroundToPanelMessage,
-  PanelToBackgroundMessage,
 } from '../../shared/messages';
 import type { CrawlConfig, CrawlProgress, DismissedPattern, ReactDetectionResult, ScanResult, StoredComponent, StoredPage, StoredPattern } from '../../shared/types';
 import { T } from './theme';

@@ -76,7 +76,7 @@ export function detectHardcodedColors(
 function classifyColorSeverity(
   element: HTMLElement,
   prop: string,
-  value: string,
+  _value: string,
   cssVarCache: Map<string, Set<string>>,
 ): ElementColorFinding['severity'] | null {
   // 1. CSS variable — not hardcoded

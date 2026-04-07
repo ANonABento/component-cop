@@ -1,13 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
-import type { StoredComponent, StoredPage, StoredPattern, PatternVariant } from '../../shared/types';
-import { variantLabel } from '../../shared/variant-label';
-import { computeStyleDiff, type StyleDiffEntry } from '../../lib/style-diff';
+import type { StoredComponent, StoredPage, StoredPattern } from '../../shared/types';
+import { computeStyleDiff } from '../../lib/style-diff';
 import { T } from './theme';
-import { ActionButton, ClickToCopy, ColorSwatch, CountBadge, EmptyState, SectionHeader, SeverityBadge, SourceLink, StatCard, SearchInput } from './primitives';
-import { aggregateColorStats, extractKeyStyles } from './helpers';
-import { generateTokenMap, type TokenMap } from '../../lib/token-generator';
-import { computePropDiff, type PropDiffEntry } from '../../lib/prop-diff';
-import { generateConsolidationSuggestion, type ConsolidationSuggestion } from '../../lib/consolidation';
+import { ActionButton, ColorSwatch, CountBadge, EmptyState, SectionHeader, SeverityBadge, SourceLink, StatCard, SearchInput } from './primitives';
+import { aggregateColorStats, extractKeyStyles, shortenPath } from './helpers';
+import { generateTokenMap } from '../../lib/token-generator';
+import { computePropDiff } from '../../lib/prop-diff';
+import { generateConsolidationSuggestion } from '../../lib/consolidation';
 
 export function DashboardTab({ pages, components, patterns, dismissed, onDismiss, onRestore }: {
   pages: StoredPage[];

@@ -146,7 +146,7 @@ export default defineBackground(() => {
     switch (message.type) {
       case 'STORE_SCAN': {
         const scan = message.payload as ScanResult;
-        const colorSummary = buildColorSummary(scan.hardcodedColors ?? []);
+        const colorSummary = buildColorSummary(scan.hardcodedColors ?? [], (await getOptions()).colorDistanceThreshold);
         await storeScanResults(
           scan.pagePath,
           scan.pageTitle,
@@ -822,10 +822,11 @@ export default defineBackground(() => {
       chrome.tabs.onUpdated.removeListener(listener);
 
       // Delay to let content script + injected script initialize
-      setTimeout(() => {
+      setTimeout(async () => {
         if (!crawler || crawler.status !== 'crawling') return;
 
-        chrome.tabs.sendMessage(tabId, { type: 'START_SCAN' }).catch(() => {
+        const crawlOpts = cachedOptions ?? await getOptions();
+        chrome.tabs.sendMessage(tabId, { type: 'START_SCAN', options: { skipComponents: crawlOpts.skipComponents, excludePatterns: crawlOpts.excludePatterns } }).catch(() => {
           if (crawler) {
             crawler.errors.push(`Failed to trigger scan on ${url}`);
             crawler.currentUrl = null;

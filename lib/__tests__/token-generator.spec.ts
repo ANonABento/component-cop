@@ -4,6 +4,8 @@ import type { AggregatedColorStats } from '../../entrypoints/panel/helpers';
 
 function makeStats(overrides: Partial<AggregatedColorStats> = {}): AggregatedColorStats {
   return {
+    uniqueColors: 0,
+    totalUsages: 0,
     topColors: [],
     nearDuplicates: [],
     ...overrides,

@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import type { ReactDetectionResult, SimilarityMatch } from '../../shared/types';
 import { EXACT_MATCH_THRESHOLD, STRONG_MATCH_THRESHOLD } from '../../shared/constants';
 import { T } from './theme';
-import { ActionButton, ClickToCopy, CountBadge, EmptyState, PulsingDot, SectionHeader , SourceLink} from './primitives';
+import { ActionButton, CountBadge, EmptyState, PulsingDot, SectionHeader , SourceLink} from './primitives';
 import { extractKeyStyles } from './helpers';
 
 interface PickerResult {

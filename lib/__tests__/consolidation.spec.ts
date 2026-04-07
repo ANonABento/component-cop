@@ -8,6 +8,7 @@ function makeComponent(overrides: Partial<StoredComponent> = {}): StoredComponen
     componentName: 'Button',
     sourceFile: 'src/Button.tsx',
     sourceLine: 10,
+    sourceColumn: null,
     domSelector: 'button',
     pagePath: '/home',
     pageTitle: 'Home',

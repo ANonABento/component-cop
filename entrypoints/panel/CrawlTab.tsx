@@ -14,8 +14,8 @@ export function CrawlTab({ onStart, onPause, onResume, onStop, progress, reactSt
   reactStatus: ReactDetectionResult | null;
   pages: StoredPage[];
 }) {
-  const [maxPages, setMaxPages] = useState(DEFAULT_CRAWL_CONFIG.maxPages);
-  const [delay, setDelay] = useState(DEFAULT_CRAWL_CONFIG.delayMs);
+  const [maxPages, setMaxPages] = useState<number>(DEFAULT_CRAWL_CONFIG.maxPages);
+  const [delay, setDelay] = useState<number>(DEFAULT_CRAWL_CONFIG.delayMs);
   const [excludeInput, setExcludeInput] = useState(DEFAULT_CRAWL_CONFIG.excludePatterns.join(', '));
 
   // Load user options to override defaults

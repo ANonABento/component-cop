@@ -426,11 +426,13 @@ export function scanPage(sessionId: string, options?: ScanOptions): ScanResult {
         hardcodedColors.push({ ...finding, componentName });
       }
 
+      const source = resolveSource(fiber);
+
       components.push({
         componentName,
-        sourceFile: resolveSource(fiber)?.fileName ?? null,
-        sourceLine: resolveSource(fiber)?.lineNumber ?? null,
-        sourceColumn: resolveSource(fiber)?.columnNumber ?? null,
+        sourceFile: source?.fileName ?? null,
+        sourceLine: source?.lineNumber ?? null,
+        sourceColumn: source?.columnNumber ?? null,
         domSelector: generateSelector(element),
         pagePath,
         pageTitle,
