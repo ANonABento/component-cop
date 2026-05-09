@@ -17,6 +17,17 @@ export interface ScanSnapshot {
   nearDuplicateColors: number;
   /** Top-level pattern names + variant counts for diffing */
   patternSummary: PatternSnapshotEntry[];
+  // New analysis metrics (optional for backwards compat)
+  complexityOutliers?: number;
+  avgComplexity?: number;
+  estimatedBundleSavings?: number;
+  uniqueTypeCombinations?: number;
+  typographyNearDuplicates?: number;
+  spacingInconsistencies?: number;
+  zIndexCollisions?: number;
+  zIndexExtremes?: number;
+  a11yIssues?: number;
+  tokenCompliancePercent?: number | null;
 }
 
 export interface PatternSnapshotEntry {
@@ -84,6 +95,17 @@ export function computeBaselineDiff(
     { label: 'HC Colors', baseline: baseline.hardcodedColors, current: current.hardcodedColors, delta: current.hardcodedColors - baseline.hardcodedColors },
     { label: 'Near-duplicate Colors', baseline: baseline.nearDuplicateColors, current: current.nearDuplicateColors, delta: current.nearDuplicateColors - baseline.nearDuplicateColors },
   ];
+
+  // Add new metrics if present in both snapshots
+  if (baseline.complexityOutliers !== undefined && current.complexityOutliers !== undefined) {
+    metrics.push({ label: 'Complexity Outliers', baseline: baseline.complexityOutliers, current: current.complexityOutliers, delta: current.complexityOutliers - baseline.complexityOutliers });
+  }
+  if (baseline.spacingInconsistencies !== undefined && current.spacingInconsistencies !== undefined) {
+    metrics.push({ label: 'Spacing Issues', baseline: baseline.spacingInconsistencies, current: current.spacingInconsistencies, delta: current.spacingInconsistencies - baseline.spacingInconsistencies });
+  }
+  if (baseline.a11yIssues !== undefined && current.a11yIssues !== undefined) {
+    metrics.push({ label: 'A11y Issues', baseline: baseline.a11yIssues, current: current.a11yIssues, delta: current.a11yIssues - baseline.a11yIssues });
+  }
 
   return { addedPatterns, removedPatterns, changedPatterns, metrics };
 }

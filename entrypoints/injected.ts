@@ -75,9 +75,6 @@ export default defineUnlistedScript(() => {
         sendToContent({ type: 'NAVIGATE_STATUS', payload: { current: 0, total: 0 } });
         break;
       }
-      case 'SIMILAR_RESULTS': {
-        break;
-      }
     }
   });
 

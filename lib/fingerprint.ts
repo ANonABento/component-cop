@@ -151,8 +151,6 @@ function spacingBucket(top: string, right: string, bottom: string, left: string)
   return 'wide';
 }
 
-
-
 function rgbToHue(r: number, g: number, b: number): number {
   const rn = r / 255;
   const gn = g / 255;

@@ -25,6 +25,7 @@ export const STYLE_PROPERTIES = [
   'box-shadow',
   'opacity',
   'display',
+  'z-index',
 ] as const;
 
 /** Fiber tags to skip (React internals, not visual components) */

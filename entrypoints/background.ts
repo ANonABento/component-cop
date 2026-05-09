@@ -21,8 +21,15 @@ import {
 } from '../shared/db';
 import type { ScanSnapshot } from '../shared/scan-history';
 import { loadOptions, type ComponentCopOptions } from '../shared/options';
+import { isExcluded } from '../shared/url-utils';
 import { computeSimilarity } from '../shared/similarity';
 import { findNearDuplicateColors } from '../lib/color-distance';
+import { auditComplexity } from '../lib/complexity-score';
+import { estimateBundleImpact } from '../lib/bundle-impact';
+import { auditTypography } from '../lib/typography-audit';
+import { auditSpacing } from '../lib/spacing-audit';
+import { auditZIndex } from '../lib/z-index-audit';
+import { auditA11y } from '../lib/a11y-audit';
 import { variantLabel } from '../shared/variant-label';
 import type {
   BackgroundToPanelMessage,
@@ -76,6 +83,15 @@ try {
 }
 
 let pendingGotoListener: ((tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => void) | null = null;
+
+/** Delay after page load before triggering navigator (ms) */
+const POST_NAVIGATE_DELAY_MS = 1500;
+/** Safety timeout for tab update listeners (ms) */
+const LISTENER_SAFETY_TIMEOUT_MS = 30_000;
+/** Delay before retrying after tab update failure (ms) */
+const CRAWL_RETRY_DELAY_MS = 500;
+/** Timeout for waiting for a scan result before skipping (ms) */
+const SCAN_TIMEOUT_MS = 15_000;
 
 const KEEPALIVE_ALARM = 'component-cop-keepalive';
 
@@ -337,7 +353,7 @@ export default defineBackground(() => {
                 } catch {
                   console.warn('[component-cop bg] Failed to trigger navigator after page load');
                 }
-              }, 1500);
+              }, POST_NAVIGATE_DELAY_MS);
             }
           };
           pendingGotoListener = listener;
@@ -346,7 +362,7 @@ export default defineBackground(() => {
           setTimeout(() => {
             chrome.tabs.onUpdated.removeListener(listener);
             if (pendingGotoListener === listener) pendingGotoListener = null;
-          }, 30_000);
+          }, LISTENER_SAFETY_TIMEOUT_MS);
         } catch {
           console.warn('[component-cop bg] Failed to navigate tab');
         }
@@ -441,6 +457,15 @@ export default defineBackground(() => {
           }
         }
 
+        // Compute new analysis metrics
+        const complexityAudit = auditComplexity(snapComps);
+        const compMap = new Map(snapComps.map((c) => [c.id, c]));
+        const bundleImpact = estimateBundleImpact(snapPatterns, compMap);
+        const typoAudit = auditTypography(snapComps);
+        const spacingAudit = auditSpacing(snapComps);
+        const zIndexAudit = auditZIndex(snapComps);
+        const a11yAudit = auditA11y(snapComps);
+
         const snapshotData: Omit<ScanSnapshot, 'id'> = {
           timestamp: Date.now(),
           label: msg.label,
@@ -455,6 +480,16 @@ export default defineBackground(() => {
             variantCount: p.variants.length,
             totalInstances: p.totalInstances,
           })),
+          complexityOutliers: complexityAudit.outliers.length,
+          avgComplexity: complexityAudit.average,
+          estimatedBundleSavings: bundleImpact.totalEstimatedSavings,
+          uniqueTypeCombinations: typoAudit.combinations.length,
+          typographyNearDuplicates: typoAudit.nearDuplicateSizes.length,
+          spacingInconsistencies: spacingAudit.totalInconsistencies,
+          zIndexCollisions: zIndexAudit.collisions.length,
+          zIndexExtremes: zIndexAudit.extremes.length,
+          a11yIssues: a11yAudit.issues.length,
+          tokenCompliancePercent: null,
         };
         const snapId = await saveSnapshot(snapshotData);
         safeSend(port, { type: 'SNAPSHOT_SAVED', id: snapId });
@@ -506,23 +541,8 @@ export default defineBackground(() => {
   }
 
   function updateBadge(tabId: number, info: ReactDetectionResult): void {
-    // chrome.action requires "action" in manifest — guard for DevTools-only extensions
-    if (!chrome.action?.setBadgeText) return;
-
-    try {
-      if (!info.found) {
-        chrome.action.setBadgeText({ tabId, text: '' });
-        chrome.action.setBadgeBackgroundColor({ tabId, color: '#888888' });
-      } else if (info.mode === 'dev') {
-        chrome.action.setBadgeText({ tabId, text: 'DEV' });
-        chrome.action.setBadgeBackgroundColor({ tabId, color: '#22c55e' });
-      } else {
-        chrome.action.setBadgeText({ tabId, text: 'PROD' });
-        chrome.action.setBadgeBackgroundColor({ tabId, color: '#eab308' });
-      }
-    } catch {
-      // Tab may have been closed or context invalidated
-    }
+    void tabId;
+    void info;
   }
 
   async function findSimilarComponents(
@@ -769,22 +789,13 @@ export default defineBackground(() => {
     crawler = null;
   }
 
-  function isExcluded(path: string, patterns: string[]): boolean {
-    return patterns.some((pattern) => {
-      if (pattern.endsWith('*')) {
-        return path.startsWith(pattern.slice(0, -1));
-      }
-      return path === pattern;
-    });
-  }
-
   function crawlNext(): void {
     if (!crawler || crawler.status !== 'crawling') return;
 
     // Check limits
     if (crawler.scannedCount >= crawler.config.maxPages) {
       crawler.status = 'done';
-    stopKeepalive();
+      stopKeepalive();
       broadcastCrawlProgress();
       crawler = null;
       return;
@@ -802,7 +813,7 @@ export default defineBackground(() => {
 
     if (!nextUrl) {
       crawler.status = 'done';
-    stopKeepalive();
+      stopKeepalive();
       broadcastCrawlProgress();
       crawler = null;
       return;
@@ -845,13 +856,13 @@ export default defineBackground(() => {
             broadcastCrawlProgress();
             setTimeout(crawlNext, crawler.config.delayMs);
           }
-        }, 15_000);
-      }, 1500);
+        }, SCAN_TIMEOUT_MS);
+      }, POST_NAVIGATE_DELAY_MS);
     };
 
     chrome.tabs.onUpdated.addListener(listener);
     // Safety: remove listener after 30s to prevent leaks
-    setTimeout(() => chrome.tabs.onUpdated.removeListener(listener), 30_000);
+    setTimeout(() => chrome.tabs.onUpdated.removeListener(listener), LISTENER_SAFETY_TIMEOUT_MS);
 
     chrome.tabs.update(tabId, { url }).catch(() => {
       chrome.tabs.onUpdated.removeListener(listener);
@@ -859,7 +870,7 @@ export default defineBackground(() => {
         crawler.errors.push(`Failed to navigate to ${url}`);
         crawler.currentUrl = null;
         broadcastCrawlProgress();
-        setTimeout(crawlNext, 500);
+        setTimeout(crawlNext, CRAWL_RETRY_DELAY_MS);
       }
     });
   }
@@ -895,7 +906,6 @@ export default defineBackground(() => {
       crawler = null;
     }
   });
-
 
   // ─── Keyboard shortcut commands ───
   chrome.commands.onCommand.addListener((command) => {

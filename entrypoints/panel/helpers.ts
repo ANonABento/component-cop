@@ -1,5 +1,5 @@
 import type { PanelToBackgroundMessage } from '../../shared/messages';
-import type { StoredComponent, StoredPage } from '../../shared/types';
+import type { AggregatedColorStats, StoredComponent, StoredPage } from '../../shared/types';
 
 export function sendMsg(port: chrome.runtime.Port, msg: PanelToBackgroundMessage): void {
   if (!chrome.runtime?.id) return;
@@ -41,13 +41,6 @@ export function extractKeyStyles(computedStyles: Record<string, string>): Record
     }
   }
   return out;
-}
-
-export interface AggregatedColorStats {
-  uniqueColors: number;
-  totalUsages: number;
-  topColors: { hex: string; count: number; usedAs: string[]; severities: string[] }[];
-  nearDuplicates: { a: string; b: string; distance: number }[];
 }
 
 export function aggregateColorStats(pages: StoredPage[]): AggregatedColorStats {

@@ -81,7 +81,7 @@ export function detectReact(): ReactDetectionResult {
  * Check if a DOM element has any React internal properties (quick existence check).
  */
 function hasReactInternals(element: Element): boolean {
-  for (const key of Object.keys(element)) {
+  for (const key of Object.keys(element as unknown as Record<string, unknown>)) {
     if (
       key.startsWith('__reactFiber$') ||
       key.startsWith('__reactInternalInstance$') ||
@@ -105,7 +105,7 @@ function findFiberRoot(fiber: Fiber): FiberRoot | null {
     current = current.return;
   }
   // The topmost fiber's stateNode is the FiberRoot
-  if (current?.stateNode && 'current' in (current.stateNode as Record<string, unknown>)) {
+  if (current?.stateNode && 'current' in (current.stateNode as unknown as Record<string, unknown>)) {
     return current.stateNode as unknown as FiberRoot;
   }
   return null;

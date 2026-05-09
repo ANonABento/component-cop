@@ -174,11 +174,6 @@ export async function deleteSnapshot(id: number): Promise<void> {
   await db.delete('snapshots', id);
 }
 
-export async function getLatestSnapshot(): Promise<ScanSnapshot | undefined> {
-  const db = await getDB();
-  const all = await db.getAllFromIndex('snapshots', 'by-timestamp');
-  return all[all.length - 1];
-}
 
 // ─── Dismissed patterns ───
 

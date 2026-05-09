@@ -1,177 +1,284 @@
 # Component Cop
 
-Chrome DevTools extension that audits React applications for component duplication, inconsistent styling patterns, and hardcoded colors.
+A Chrome DevTools extension that audits React applications for UI duplication and inconsistency. Point it at any React app and get instant visibility into duplicated components, hardcoded colors, accessibility issues, spacing drift, and more.
 
-Open DevTools, navigate to the **Component Cop** panel, and scan any React app to get a full audit of UI inconsistencies — no code changes or React DevTools required.
+**151 tests** | **373 KB bundle** | **Chrome MV3 + Firefox** | **Works on dev and prod React apps**
 
-## Features
+---
 
-- **Component scanning** — Walks the React fiber tree to extract every rendered component with its computed styles, props, DOM structure, and source location
-- **Pattern detection** — Groups identical components and clusters style variants (e.g., "Button has 3 visual variants across 12 instances")
-- **Similarity matching** — Weighted style + structure scoring to find near-duplicate components across pages
-- **Hardcoded color detection** — Tailwind-aware severity classification (inline > non-tailwind > tw-arbitrary) with CIE76 near-duplicate color pairing
-- **Element picker** — Click-to-select with level navigation (scroll/arrows to traverse the fiber ancestor chain)
-- **Component navigator** — Ctrl+F-style cycling through similar components on the page
-- **Multi-page crawling** — Automated same-origin crawl with configurable limits, delay, and exclude patterns
-- **IndexedDB persistence** — Scan results survive page navigations and DevTools close/reopen
-- **Export** — JSON (machine-readable) and LLM-optimized XML formats with full color audit and pattern data
+## Quick Start
+
+```bash
+git clone https://github.com/ANonABento/component-cop.git
+cd component-cop
+npm install
+npm run build
+```
+
+1. Open `chrome://extensions`
+2. Enable **Developer mode** (top right toggle)
+3. Click **Load unpacked** and select the `.output/chrome-mv3` directory
+4. Open DevTools (F12) on any React app and click the **Component Cop** tab
+
+For a detailed walkthrough, see the **[User Guide](docs/USER_GUIDE.md)**.
+
+### Release Packages
+
+```bash
+npm run package:chrome
+npm run package:firefox
+```
+
+Both commands run type checking and tests before creating store-ready ZIP artifacts in `.output/`.
+
+---
+
+## What It Finds
+
+| Analysis | What it surfaces |
+|----------|-----------------|
+| **Pattern Detection** | Components grouped by visual similarity, with variant diffs and consolidation suggestions |
+| **Color Audit** | Hardcoded colors, near-duplicate pairs (CIE76), design token extraction |
+| **Complexity Scoring** | 0-100 score per component (DOM depth, children, props, area) with outlier detection |
+| **Typography Audit** | Type scale, near-duplicate font sizes, font family inventory, combination explosion |
+| **Spacing Audit** | Same component using different padding/margin across pages |
+| **Z-Index Audit** | Collisions (different components at same z-index), extreme values |
+| **Accessibility** | Missing alt text, missing labels, WCAG AA contrast failures, small touch targets |
+| **Token Compliance** | Check all styles against your design tokens, with nearest-token suggestions |
+| **Bundle Impact** | Estimated byte savings from consolidating duplicate patterns |
+
+---
+
+## Key Features
+
+- **Single-page scan** — one-click analysis of the current page's React component tree
+- **Element picker** — click any element to inspect it and find similar instances across pages
+- **Multi-page crawler** — auto-navigate and scan an entire site, building a cross-page database
+- **8 dashboard sections** — deep analysis across patterns, colors, complexity, typography, spacing, z-index, accessibility, and token compliance
+- **Consolidation engine** — concrete refactoring suggestions ("add a `size` prop") with effort estimates and bundle savings
+- **Design token generation** — export detected colors as CSS custom properties, Tailwind config, or JSON
+- **Design token compliance** — import your token set (JSON or file) and audit your app against it
+- **Baseline tracking** — save snapshots over time, set a baseline, see if your codebase is improving
+- **LLM export** — structured XML format for pasting into Claude/ChatGPT for automated refactoring
+- **Report exports** — JSON, XML, and Markdown downloads plus prefilled issue creation
+- **Privacy-first scanning** — scans run only after user action, data stays local until exported
+- **CI integration** — browser-agnostic report generator with pass/fail thresholds and regression detection
+- **Source links** — click any component to open it in VS Code/Cursor at the exact line
+- **Keyboard shortcuts** — `Cmd+Shift+S` to scan, `Cmd+Shift+P` to toggle picker
+
+---
 
 ## Architecture
 
-Four execution contexts connected by message passing:
+Four execution contexts communicating via Chrome message passing:
 
 ```
-┌─────────────┐  window.postMessage  ┌─────────────┐  chrome.runtime  ┌────────────┐  port  ┌───────────┐
-│  Injected   │◄────────────────────►│   Content    │◄────────────────►│ Background │◄──────►│   Panel   │
-│ (MAIN world)│                      │  (isolated)  │                  │  (worker)  │        │ (DevTools)│
-└─────────────┘                      └─────────────┘                  └────────────┘        └───────────┘
- React fiber access                   Message relay                    Storage + crawl       React UI
+┌─────────────────────────────────────────────────────┐
+│              DevTools Panel (React)                  │
+│  Scan · Picker · Crawl · Dashboard · Export · History│
+└────────────────────────┬────────────────────────────┘
+                         │ chrome.runtime.connect
+┌────────────────────────▼────────────────────────────┐
+│           Background Service Worker                  │
+│  IndexedDB storage · pattern matching · crawl        │
+│  orchestration · audit computation on snapshots      │
+└──────────┬──────────────────────────┬───────────────┘
+           │ chrome.tabs.sendMessage  │
+┌──────────▼──────────────────────────▼───────────────┐
+│           Content Script (ISOLATED world)             │
+│  Message relay between page and extension             │
+└──────────┬──────────────────────────┬───────────────┘
+           │ window.postMessage       │
+┌──────────▼──────────────────────────▼───────────────┐
+│           Injected Script (MAIN world)               │
+│  React fiber tree walking · component extraction     │
+│  color detection · element picker · navigator        │
+└─────────────────────────────────────────────────────┘
 ```
 
-| Context | Files | Role |
-|---------|-------|------|
-| **Injected** | `entrypoints/injected.ts`, `lib/*` | Runs in page's MAIN world. Direct access to React internals, DOM, computed styles. Handles scanning, picking, and navigation. |
-| **Content** | `entrypoints/content.ts` | Isolated content script. Relays messages between injected (postMessage) and background (chrome.runtime). |
-| **Background** | `entrypoints/background.ts` | Service worker. IndexedDB storage, similarity search, pattern computation, crawl orchestration, panel relay. |
-| **Panel** | `entrypoints/panel/App.tsx` | DevTools panel React app. Dashboard, picker results, pattern explorer, crawl controls, export. |
+The injected script runs in the page's MAIN world where it can access `__reactFiber$` properties and `getComputedStyle`. Everything flows back through the content script relay to the background worker (IndexedDB storage) and panel (React UI).
+
+---
 
 ## Project Structure
 
 ```
 component-cop/
 ├── entrypoints/
-│   ├── injected.ts          # Page-world script (fiber access)
-│   ├── content.ts           # Content script (message relay)
-│   ├── background.ts        # Service worker (storage, crawl, patterns)
-│   ├── devtools/             # DevTools page (creates panel)
-│   └── panel/
-│       ├── App.tsx           # Panel UI (dashboard, picker, patterns, export)
-│       └── main.tsx          # React entry point
-├── lib/
-│   ├── scanner.ts           # Page scanner (fiber walk, component extraction)
-│   ├── picker.ts            # Element picker with level navigation
-│   ├── navigator.ts         # Ctrl+F component navigator
-│   ├── fiber-utils.ts       # Shared fiber↔DOM utilities
-│   ├── fingerprint.ts       # Categorical style fingerprinting
-│   ├── structure-hash.ts    # DOM structure hashing
-│   ├── selector.ts          # Stable CSS selector generation
-│   ├── color-detection.ts   # Tailwind-aware hardcoded color detection
-│   ├── color-distance.ts    # CIE76 perceptual color distance
-│   └── __tests__/           # Unit tests
-├── shared/
-│   ├── types.ts             # All TypeScript interfaces
-│   ├── messages.ts          # Message type definitions + helpers
-│   ├── constants.ts         # Thresholds, skip lists, config
-│   ├── db.ts                # IndexedDB operations (idb wrapper)
-│   ├── similarity.ts        # Style + structure similarity scoring
-│   ├── hash.ts              # FNV-1a hash function
-│   └── variant-label.ts     # A-Z, AA, AB... label generator
-└── wxt.config.ts            # WXT build config + manifest
+│   ├── injected.ts              # MAIN world — fiber tree, scanner, picker, navigator
+│   ├── content.ts               # ISOLATED world — message relay
+│   ├── background.ts            # Service worker — storage, patterns, crawl, audit computation
+│   ├── devtools/main.ts         # Creates the DevTools panel
+│   ├── options/OptionsPage.tsx   # Options page (thresholds, exclusions, design tokens)
+│   └── panel/                   # DevTools panel UI (React)
+│       ├── App.tsx               # Tab router, port management, state
+│       ├── DashboardTab.tsx      # Stats grid + data-driven section pill bar
+│       ├── dashboard/            # 8 extracted dashboard sections
+│       │   ├── PatternSection.tsx
+│       │   ├── ColorSection.tsx
+│       │   ├── ComplexitySection.tsx
+│       │   ├── TypographySection.tsx
+│       │   ├── SpacingSection.tsx
+│       │   ├── ZIndexSection.tsx
+│       │   ├── A11ySection.tsx
+│       │   └── TokenComplianceSection.tsx
+│       ├── ScanTab.tsx           # Single-page scan with component table
+│       ├── PickerTab.tsx         # Element picker with similarity results
+│       ├── CrawlTab.tsx          # Multi-page crawler controls
+│       ├── ExportTab.tsx         # JSON and LLM export
+│       ├── HistoryTab.tsx        # Snapshots, baselines, trend charts
+│       ├── primitives.tsx        # Shared UI components
+│       ├── helpers.ts            # Panel utilities
+│       └── theme.ts              # Dark theme tokens
+├── lib/                         # Core analysis (browser-agnostic, no DOM/chrome APIs)
+│   ├── scanner.ts               # React detection, fiber tree walking
+│   ├── fingerprint.ts           # Style fingerprinting (categorical + hash-based)
+│   ├── structure-hash.ts        # DOM structure hashing
+│   ├── color-detection.ts       # Hardcoded color detection (Tailwind-aware)
+│   ├── color-distance.ts        # CIE76 color distance, near-duplicate detection
+│   ├── consolidation.ts         # Refactoring suggestion engine
+│   ├── prop-diff.ts             # Prop shape diffing between variants
+│   ├── style-diff.ts            # CSS property diffing between variants
+│   ├── token-generator.ts       # Design token generation (CSS/Tailwind/JSON)
+│   ├── complexity-score.ts      # Component complexity scoring (0-100)
+│   ├── bundle-impact.ts         # Bundle savings estimation
+│   ├── typography-audit.ts      # Font usage analysis
+│   ├── spacing-audit.ts         # Spacing inconsistency detection
+│   ├── z-index-audit.ts         # Z-index collision and extreme detection
+│   ├── a11y-audit.ts            # Accessibility checks (WCAG AA)
+│   ├── token-compliance.ts      # Design token compliance auditing
+│   ├── picker.ts                # Element picker with keyboard navigation
+│   ├── navigator.ts             # Instance navigator
+│   ├── fiber-utils.ts           # Fiber tree utilities
+│   ├── selector.ts              # CSS selector generation
+│   └── __tests__/               # 151 unit tests across 18 test files
+├── shared/                      # Shared between all contexts
+│   ├── types.ts                 # All TypeScript interfaces
+│   ├── messages.ts              # Typed message definitions
+│   ├── constants.ts             # Thresholds, defaults, skip lists
+│   ├── db.ts                    # IndexedDB via idb (v3 schema)
+│   ├── options.ts               # chrome.storage options + design token storage
+│   ├── similarity.ts            # Similarity scoring (55% style + 45% structure)
+│   ├── color-utils.ts           # RGB/hex conversion utilities
+│   ├── scan-history.ts          # Snapshot types and baseline diffing
+│   ├── hash.ts                  # djb2 string hashing
+│   ├── url-utils.ts             # URL exclusion matching
+│   └── variant-label.ts         # A/B/C/... labeling
+├── ci/
+│   └── ci-report.ts             # CI report generator with 9 threshold checks + regression detection
+├── wxt.config.ts                # WXT build configuration
+└── vitest.config.ts             # Test configuration
 ```
 
-## How It Works
+---
 
-### Scanning
+## How Similarity Scoring Works
 
-1. `scanner.ts` calls `findFiberRoots()` to locate React roots — tries DevTools hook first, falls back to scanning DOM properties (`__reactFiber$`, `__reactContainer$`, `_reactRootContainer`)
-2. Walks the fiber tree iteratively, skipping internal fibers (Fragment, Provider, Router, etc.)
-3. For each component: extracts computed styles, computes a categorical style fingerprint, hashes the DOM structure, detects hardcoded colors, and serializes sanitized props
-4. Results are sent through content → background → stored in IndexedDB
+Each component gets two fingerprints:
 
-### Fingerprinting
+1. **Style fingerprint** — computed styles are categorized (e.g., "rounded corners", "bold text", "blue background") and hashed. Two components with the same categories get a high style score via Jaccard similarity.
 
-Style fingerprinting buckets CSS values into categories for fuzzy comparison:
+2. **Structure hash** — DOM tree serialized to a normalized string (tag names + nesting, up to depth 3) and hashed. Identical structure = 1.0 score.
 
-| Property | Buckets |
-|----------|---------|
-| Colors | `black`, `gray-dark`, `gray-mid`, `gray-light`, `white`, `red`, `blue`, `green`, etc. |
-| Font family | `mono`, `sans`, `serif` |
-| Font size | `xs`, `sm`, `md`, `lg`, `xl`, `2xl` |
-| Dimensions | `auto`, `tiny`, `small`, `medium`, `large`, `xlarge`, `partial`, `half+`, `full` |
-| Spacing | `none`, `tight`, `compact`, `normal`, `spacious`, `wide` |
+Final similarity = **55% style + 45% structure**. Components above the threshold (default 0.7) are grouped. Components sharing a name are further sub-grouped by style fingerprint into variants.
 
-The category vector is hashed for fast grouping, while the raw categories are preserved for slot-by-slot similarity comparison.
+---
 
-### Similarity Scoring
+## CI Integration
 
-Components are compared using a weighted combination:
+The CI report module (`ci/ci-report.ts`) works outside the browser. Feed it scan data and get a pass/fail JSON report:
 
-- **Style similarity** (55%) — Slot-by-slot category match ratio
-- **Structure similarity** (45%) — Hash match (1.0), same component name (0.5), or different (0.0)
-- **Name bonus** — +0.15 when component names match (capped at 1.0)
+```typescript
+import { generateCIReport, checkRegression } from './ci/ci-report';
 
-Thresholds: `0.70` similar, `0.85` strong match, `0.95` exact match.
+const report = generateCIReport(url, pages, components, patterns, colorStats, {
+  maxDuplicates: 5,           // max multi-variant patterns
+  maxHardcodedColors: 20,     // max hardcoded color usages
+  maxNearDuplicates: 3,       // max near-duplicate color pairs
+  maxComplexityOutliers: 10,  // max components scoring 80+
+  maxTypeCombinations: 15,    // max unique type combos
+  maxSpacingInconsistencies: 5,
+  maxZIndexCollisions: 2,
+  maxA11yIssues: 0,           // zero-tolerance for a11y
+  minTokenCompliance: 80,     // minimum compliance %
+});
 
-### Color Detection
+// Compare against a baseline
+const regression = checkRegression(baselineReport, currentReport);
+if (regression.regressed) {
+  console.error(regression.regressions.join('\n'));
+  process.exit(1);
+}
+```
 
-For each element, the detector:
-1. Checks if the color comes from a CSS variable (not hardcoded — skip)
-2. Checks for inline styles (highest severity: `inline`)
-3. Checks Tailwind classes — standard utility = skip, arbitrary value like `text-[#ff0000]` = `tw-arbitrary`
-4. Everything else = `non-tailwind`
+---
 
-Near-duplicate colors are found using CIE76 distance in Lab color space (threshold: 5.0).
+## Privacy And Permissions
+
+Component Cop stores scan results in the local browser profile. It does not send telemetry, upload reports, or submit issues automatically. Exporting, copying, downloading, and issue submission are user-triggered actions.
+
+Required permissions are intentionally narrow for the feature set:
+
+| Permission | Why it is needed |
+|------------|------------------|
+| `activeTab` | Inspect the page the user chooses to scan |
+| `scripting` | Inject the page-world React scanner |
+| `storage` | Save options, scan history, baselines, and local design tokens |
+| `alarms` | Keep long same-origin crawls alive |
+| `<all_urls>` | Allow the DevTools panel to work on arbitrary local, staging, and production React apps |
+
+Full details are in **[Privacy](docs/PRIVACY.md)**.
+
+Firefox data collection consent is declared as `required: ["none"]` because Component Cop does not transmit personal data outside the extension.
+
+---
+
+## Publish-Ready Checklist
+
+Artifacts:
+
+- Run `npm run package:chrome` and upload the Chrome ZIP from `.output/`.
+- Run `npm run package:firefox` and upload the Firefox ZIP plus source ZIP from `.output/`.
+- Confirm generated manifests include DevTools panel, background service worker, content script, options page, action metadata, commands, icons, and Firefox Gecko settings.
+
+Metadata:
+
+- Use **[Store Listing Materials](docs/STORE_LISTING.md)** for short description, full description, feature bullets, review notes, and screenshot checklist.
+- Use **[Privacy](docs/PRIVACY.md)** for data use, retention, and permission disclosure.
+- Use **[Release Checklist](docs/RELEASE.md)** before submitting a new version.
+- Update **[CHANGELOG](CHANGELOG.md)** and bump the version with `npm run version:patch`, `npm run version:minor`, or `npm run version:major`.
+
+Manual smoke test:
+
+- Load the unpacked Chrome and Firefox builds.
+- Open a React app, accept scan safety, run **Scan Page**, confirm Dashboard data appears.
+- Export JSON, XML, and Markdown; verify **Create Issue** opens a prefilled issue draft.
+- Clear data and confirm local scan history is removed.
+
+---
 
 ## Development
 
 ```bash
-# Install dependencies
-npm install
-
-# Dev mode (hot reload)
-npm run dev
-
-# Production build
-npm run build
-
-# Package as .zip
-npm run zip
-
-# Run tests
-npm test
-
-# Type check
-npm run check
+npm run dev      # Watch mode with hot reload
+npm test         # Run 151 unit tests
+npm run check    # TypeScript type checking
+npm run build    # Production Chrome build (outputs to .output/chrome-mv3)
+npm run build:firefox
 ```
 
-### Loading in Chrome
-
-1. `npm run build`
-2. Open `chrome://extensions`
-3. Enable "Developer mode"
-4. Click "Load unpacked" → select `.output/chrome-mv3`
-5. Open DevTools on any React app → find the "Component Cop" panel
-
-### Testing
-
-Tests use Vitest with `fake-indexeddb` for storage tests:
-
-```bash
-npm test              # Single run
-npm run test:watch    # Watch mode
-```
-
-Test coverage:
-- `fingerprint.spec.ts` — Style bucketing (color, font, size, spacing, dimension)
-- `similarity.spec.ts` — Scoring edge cases, name bonus, threshold boundaries
-- `color-distance.spec.ts` — CIE76 distance, near-duplicate detection, hex parsing
-
-## Key Design Decisions
-
-**No React DevTools dependency** — The extension works on production React apps by scanning DOM properties (`__reactFiber$`) directly. DevTools hook is used when available but not required.
-
-**Categorical fingerprinting over exact values** — Raw `rgb(59, 130, 246)` values would never match across themes or slight variations. Bucketing into `blue` allows meaningful comparison.
-
-**IndexedDB over chrome.storage** — Component data can be large (hundreds of components with full computed styles). IndexedDB handles this without hitting storage limits and supports indexed queries.
-
-**Iterative fiber walking** — React trees can be very deep. The main `walkFiberTree` and `findHostElementDown` use explicit stacks to avoid stack overflow.
-
-**Global callback pattern for monkey-patches** — History API patches are idempotent (sentinel-guarded) and route through a global callback so destroy/re-create cycles work correctly.
+---
 
 ## Tech Stack
 
-- [WXT](https://wxt.dev) — Extension framework (Manifest V3, Vite-based)
-- [React 19](https://react.dev) — Panel UI
-- [idb](https://github.com/jakearchibald/idb) — IndexedDB wrapper with TypeScript generics
-- [Vitest](https://vitest.dev) — Unit testing
-- TypeScript — Strict mode throughout
+- **[WXT](https://wxt.dev)** — Chrome extension framework (Manifest V3)
+- **React 19** — DevTools panel and options page
+- **TypeScript** — full type safety across all contexts
+- **[idb](https://github.com/nicolestandifer3/idb-next.js)** — typed IndexedDB wrapper
+- **Vitest** — 151 tests across 18 files
+- **CIE76** — perceptual color distance
+- **W3C relative luminance** — WCAG AA contrast ratio checking
+
+## License
+
+MIT

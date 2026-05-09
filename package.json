@@ -5,8 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "wxt",
-    "build": "wxt build",
-    "zip": "wxt zip",
+    "build": "wxt build -b chrome",
+    "build:chrome": "wxt build -b chrome",
+    "build:firefox": "wxt build -b firefox",
+    "package:chrome": "npm run check && npm test && wxt zip -b chrome",
+    "package:firefox": "npm run check && npm test && wxt zip -b firefox --sources",
+    "zip": "wxt zip -b chrome",
+    "version:patch": "npm version patch --no-git-tag-version",
+    "version:minor": "npm version minor --no-git-tag-version",
+    "version:major": "npm version major --no-git-tag-version",
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "tsc --noEmit"

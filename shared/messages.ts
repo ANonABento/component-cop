@@ -33,7 +33,6 @@ export type ContentToInjectedMessage =
   | { type: 'NAVIGATE_NEXT' }
   | { type: 'NAVIGATE_PREV' }
   | { type: 'NAVIGATE_EXIT' }
-  | { type: 'SIMILAR_RESULTS'; payload: SimilarityMatch[] };
 
 // ─── Content Script ↔ Background Service Worker (via chrome.runtime) ───
 

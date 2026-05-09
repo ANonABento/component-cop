@@ -123,23 +123,21 @@ export function PickerTab({ onPick, onCancel, picking, result, reactStatus, navS
     return output;
   }, [result]);
 
-  const handleCopyJSON = useCallback(() => {
-    const text = generatePickerExport();
+  const copyText = useCallback((text: string, label: 'json' | 'llm') => {
     if (!text) return;
     navigator.clipboard.writeText(text).then(
-      () => { setCopied('json'); setTimeout(() => setCopied(false), 2000); },
+      () => { setCopied(label); setTimeout(() => setCopied(false), 2000); },
       () => {},
     );
-  }, [generatePickerExport]);
+  }, []);
+
+  const handleCopyJSON = useCallback(() => {
+    copyText(generatePickerExport(), 'json');
+  }, [copyText, generatePickerExport]);
 
   const handleCopyLLM = useCallback(() => {
-    const text = generateLLMExport();
-    if (!text) return;
-    navigator.clipboard.writeText(text).then(
-      () => { setCopied('llm'); setTimeout(() => setCopied(false), 2000); },
-      () => {},
-    );
-  }, [generateLLMExport]);
+    copyText(generateLLMExport(), 'llm');
+  }, [copyText, generateLLMExport]);
 
   const handleDownloadExport = useCallback(() => {
     const text = generatePickerExport();

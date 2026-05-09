@@ -1,4 +1,4 @@
-import { hexToRGB as hexToRGBShared } from '../shared/color-utils';
+import { hexToRGB } from '../shared/color-utils';
 /**
  * CIE76 color distance between two hex colors.
  * Converts hex → RGB → Lab, then Euclidean distance in Lab space.
@@ -15,7 +15,6 @@ export function colorDistance(hexA: string, hexB: string): number {
   );
 }
 
-const hexToRGB = hexToRGBShared;
 
 function hexToLab(hex: string): [number, number, number] | null {
   const rgb = hexToRGB(hex);

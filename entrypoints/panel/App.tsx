@@ -13,8 +13,13 @@ import { DashboardTab } from './DashboardTab';
 import { ExportTab } from './ExportTab';
 import { HistoryTab } from './HistoryTab';
 import type { ScanSnapshot } from '../../shared/scan-history';
+import { loadDesignTokens } from '../../shared/options';
+import type { DesignTokenSet } from '../../lib/token-compliance';
 
 type Tab = 'scan' | 'picker' | 'crawl' | 'dashboard' | 'export' | 'history';
+
+/** Max time to show the scanning spinner before auto-resetting (ms) */
+const UI_SCAN_TIMEOUT_MS = 30_000;
 
 // Inject keyframe animations once (not per-render)
 const KEYFRAMES_INJECTED = (() => {
@@ -32,6 +37,13 @@ export function App() {
   // Reference to prevent tree-shaking
   void KEYFRAMES_INJECTED;
   const portRef = useRef<chrome.runtime.Port | null>(null);
+
+  /** Guard + send helper — returns false if port/runtime unavailable. */
+  const trySend = useCallback((msg: Parameters<typeof sendMsg>[1]): boolean => {
+    if (!portRef.current || !chrome.runtime?.id) return false;
+    sendMsg(portRef.current, msg);
+    return true;
+  }, []);
   const [tab, setTab] = useState<Tab>('scan');
   const [reactStatus, setReactStatus] = useState<ReactDetectionResult | null>(null);
   const [lastScan, setLastScan] = useState<ScanResult | null>(null);
@@ -44,10 +56,21 @@ export function App() {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [snapshots, setSnapshots] = useState<ScanSnapshot[]>([]);
   const [baselineId, setBaselineId] = useState<number | null>(null);
+  const [designTokens, setDesignTokens] = useState<DesignTokenSet | null>(null);
   const [navStatus, setNavStatus] = useState<{ current: number; total: number } | null>(null);
   const [crawlProgress, setCrawlProgress] = useState<CrawlProgress | null>(null);
   const crawlProgressRef = useRef<CrawlProgress | null>(null);
   const [contextInvalidated, setContextInvalidated] = useState(false);
+
+  // Load design tokens from storage
+  useEffect(() => {
+    loadDesignTokens().then(setDesignTokens);
+    // Re-check when tab becomes visible (user may have changed tokens in Options)
+    const onVisibility = () => { if (!document.hidden) loadDesignTokens().then(setDesignTokens); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
+
   const scanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -141,7 +164,7 @@ export function App() {
           case 'PATTERN_RESTORED':
           case 'DISMISSED_CLEARED':
             // Refresh dismissed set from IDB
-            if (portRef.current) sendMsg(portRef.current, { type: 'GET_DISMISSED' });
+            trySend({ type: 'GET_DISMISSED' });
             break;
           case 'ALL_SNAPSHOTS':
             setSnapshots(msg.payload);
@@ -149,7 +172,7 @@ export function App() {
           case 'SNAPSHOT_SAVED':
           case 'SNAPSHOT_DELETED':
             // Refresh snapshots list
-            if (portRef.current) sendMsg(portRef.current, { type: 'GET_SNAPSHOTS' });
+            trySend({ type: 'GET_SNAPSHOTS' });
             break;
           case 'BASELINE_SET':
             setBaselineId(msg.id);
@@ -188,122 +211,70 @@ export function App() {
   }, []);
 
   const handleScan = useCallback(() => {
-    if (!portRef.current || !chrome.runtime?.id) return;
     setScanning(true);
-    try {
-      sendMsg(portRef.current, {
-        type: 'TRIGGER_SCAN',
-        tabId: chrome.devtools.inspectedWindow.tabId,
-      });
-    } catch {
-      setContextInvalidated(true);
+    if (!trySend({ type: 'TRIGGER_SCAN', tabId: chrome.devtools.inspectedWindow.tabId })) {
       setScanning(false);
       return;
     }
     if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
-    scanTimeoutRef.current = setTimeout(() => setScanning(false), 30_000);
-  }, []);
+    scanTimeoutRef.current = setTimeout(() => setScanning(false), UI_SCAN_TIMEOUT_MS);
+  }, [trySend]);
 
   const handlePicker = useCallback(() => {
-    if (!portRef.current || !chrome.runtime?.id) return;
-    setPicking(true);
-    sendMsg(portRef.current, {
-      type: 'TRIGGER_PICKER',
-      tabId: chrome.devtools.inspectedWindow.tabId,
-    });
-  }, []);
+    if (trySend({ type: 'TRIGGER_PICKER', tabId: chrome.devtools.inspectedWindow.tabId })) {
+      setPicking(true);
+    }
+  }, [trySend]);
 
   const handleCancelPicker = useCallback(() => {
-    if (!portRef.current || !chrome.runtime?.id) return;
-    setPicking(false);
-    sendMsg(portRef.current, {
-      type: 'CANCEL_PICKER',
-      tabId: chrome.devtools.inspectedWindow.tabId,
-    });
-  }, []);
+    if (trySend({ type: 'CANCEL_PICKER', tabId: chrome.devtools.inspectedWindow.tabId })) {
+      setPicking(false);
+    }
+  }, [trySend]);
 
   const handleNavigateStart = useCallback((target: { componentName: string; styleCategories: string[]; structureHash: string }) => {
-    if (!portRef.current || !chrome.runtime?.id) return;
-    sendMsg(portRef.current, {
-      type: 'NAVIGATE_SIMILAR',
-      tabId: chrome.devtools.inspectedWindow.tabId,
-      target,
-    });
-  }, []);
+    trySend({ type: 'NAVIGATE_SIMILAR', tabId: chrome.devtools.inspectedWindow.tabId, target });
+  }, [trySend]);
 
   const handleNavigateNext = useCallback(() => {
-    if (!portRef.current || !chrome.runtime?.id) return;
-    sendMsg(portRef.current, {
-      type: 'NAVIGATE_NEXT',
-      tabId: chrome.devtools.inspectedWindow.tabId,
-    });
-  }, []);
+    trySend({ type: 'NAVIGATE_NEXT', tabId: chrome.devtools.inspectedWindow.tabId });
+  }, [trySend]);
 
   const handleNavigatePrev = useCallback(() => {
-    if (!portRef.current || !chrome.runtime?.id) return;
-    sendMsg(portRef.current, {
-      type: 'NAVIGATE_PREV',
-      tabId: chrome.devtools.inspectedWindow.tabId,
-    });
-  }, []);
+    trySend({ type: 'NAVIGATE_PREV', tabId: chrome.devtools.inspectedWindow.tabId });
+  }, [trySend]);
 
   const handleNavigateExit = useCallback(() => {
-    if (!portRef.current || !chrome.runtime?.id) return;
-    setNavStatus(null);
-    sendMsg(portRef.current, {
-      type: 'NAVIGATE_EXIT',
-      tabId: chrome.devtools.inspectedWindow.tabId,
-    });
-  }, []);
+    if (trySend({ type: 'NAVIGATE_EXIT', tabId: chrome.devtools.inspectedWindow.tabId })) {
+      setNavStatus(null);
+    }
+  }, [trySend]);
 
   const handleGotoPageAndNavigate = useCallback((url: string, target: { componentName: string; styleCategories: string[]; structureHash: string }) => {
-    if (!portRef.current || !chrome.runtime?.id) return;
-    setNavStatus(null);
-    sendMsg(portRef.current, {
-      type: 'GOTO_PAGE_AND_NAVIGATE',
-      tabId: chrome.devtools.inspectedWindow.tabId,
-      url,
-      target,
-    });
-  }, []);
+    if (trySend({ type: 'GOTO_PAGE_AND_NAVIGATE', tabId: chrome.devtools.inspectedWindow.tabId, url, target })) {
+      setNavStatus(null);
+    }
+  }, [trySend]);
 
   const handleStartCrawl = useCallback((config: CrawlConfig) => {
-    if (!portRef.current || !chrome.runtime?.id) return;
-    sendMsg(portRef.current, {
-      type: 'TRIGGER_CRAWL',
-      tabId: chrome.devtools.inspectedWindow.tabId,
-      config,
-    });
-  }, []);
+    trySend({ type: 'TRIGGER_CRAWL', tabId: chrome.devtools.inspectedWindow.tabId, config });
+  }, [trySend]);
 
   const handlePauseCrawl = useCallback(() => {
-    if (!portRef.current || !chrome.runtime?.id) return;
-    sendMsg(portRef.current, {
-      type: 'PAUSE_CRAWL',
-      tabId: chrome.devtools.inspectedWindow.tabId,
-    });
-  }, []);
+    trySend({ type: 'PAUSE_CRAWL', tabId: chrome.devtools.inspectedWindow.tabId });
+  }, [trySend]);
 
   const handleStopCrawl = useCallback(() => {
-    if (!portRef.current || !chrome.runtime?.id) return;
-    sendMsg(portRef.current, {
-      type: 'STOP_CRAWL',
-      tabId: chrome.devtools.inspectedWindow.tabId,
-    });
-  }, []);
+    trySend({ type: 'STOP_CRAWL', tabId: chrome.devtools.inspectedWindow.tabId });
+  }, [trySend]);
 
   const handleResumeCrawl = useCallback(() => {
-    if (!portRef.current || !chrome.runtime?.id) return;
-    sendMsg(portRef.current, {
-      type: 'RESUME_CRAWL',
-      tabId: chrome.devtools.inspectedWindow.tabId,
-    });
-  }, []);
+    trySend({ type: 'RESUME_CRAWL', tabId: chrome.devtools.inspectedWindow.tabId });
+  }, [trySend]);
 
   const handleClearData = useCallback(() => {
-    if (!portRef.current || !chrome.runtime?.id) return;
-    sendMsg(portRef.current, { type: 'CLEAR_ALL_DATA' });
-  }, []);
+    trySend({ type: 'CLEAR_ALL_DATA' });
+  }, [trySend]);
 
   if (contextInvalidated) {
     return (
@@ -388,7 +359,7 @@ export function App() {
           />
         )}
         {tab === 'dashboard' && (
-          <DashboardTab pages={pages} components={allComponents} patterns={patterns} dismissed={dismissed} onDismiss={(id, reason) => { if (portRef.current) sendMsg(portRef.current, { type: 'DISMISS_PATTERN', patternId: id, reason }); }} onRestore={(id) => { if (portRef.current) sendMsg(portRef.current, { type: 'RESTORE_PATTERN', patternId: id }); }} />
+          <DashboardTab pages={pages} components={allComponents} patterns={patterns} dismissed={dismissed} onDismiss={(id, reason) => { trySend({ type: 'DISMISS_PATTERN', patternId: id, reason }); }} onRestore={(id) => { trySend({ type: 'RESTORE_PATTERN', patternId: id }); }} designTokens={designTokens} />
         )}
         {tab === 'export' && (
           <ExportTab components={allComponents} pages={pages} patterns={patterns} />
@@ -397,8 +368,8 @@ export function App() {
           <HistoryTab
             snapshots={snapshots}
             baselineId={baselineId}
-            onSave={(label) => { if (portRef.current) sendMsg(portRef.current, { type: 'SAVE_SNAPSHOT', label }); }}
-            onDelete={(id) => { if (portRef.current) sendMsg(portRef.current, { type: 'DELETE_SNAPSHOT', id }); }}
+            onSave={(label) => { trySend({ type: 'SAVE_SNAPSHOT', label }); }}
+            onDelete={(id) => { trySend({ type: 'DELETE_SNAPSHOT', id }); }}
             onSetBaseline={(id) => { setBaselineId(id); chrome.storage.local.set({ baselineId: id }); }}
             onClearBaseline={() => { setBaselineId(null); chrome.storage.local.remove('baselineId'); }}
           />

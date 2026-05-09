@@ -53,7 +53,6 @@ export default defineContentScript({
         const INJECTED_MESSAGE_TYPES = new Set([
           'START_SCAN', 'ENTER_PICKER_MODE', 'EXIT_PICKER_MODE',
           'NAVIGATE_SIMILAR', 'NAVIGATE_NEXT', 'NAVIGATE_PREV', 'NAVIGATE_EXIT',
-          'SIMILAR_RESULTS',
         ]);
         chrome.runtime.onMessage.addListener((message: { type: string; payload?: unknown }) => {
           if (!INJECTED_MESSAGE_TYPES.has(message.type)) return;

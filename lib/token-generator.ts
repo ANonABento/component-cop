@@ -6,7 +6,7 @@
  * names tokens by their dominant usage context.
  */
 
-import type { AggregatedColorStats } from '../entrypoints/panel/helpers';
+import type { AggregatedColorStats } from '../shared/types';
 
 export interface DesignToken {
   name: string;

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { StoredComponent, StoredPage, StoredPattern } from '../../shared/types';
 import { variantLabel } from '../../shared/variant-label';
 import { T } from './theme';
@@ -6,11 +6,93 @@ import { ActionButton, EmptyState } from './primitives';
 import { aggregateColorStats, groupByName } from './helpers';
 
 export function ExportTab({ components, pages, patterns }: { components: StoredComponent[]; pages: StoredPage[]; patterns: StoredPattern[] }) {
-  const [format, setFormat] = useState<'json' | 'llm'>('json');
+  const [format, setFormat] = useState<'json' | 'llm' | 'markdown'>('json');
   const [copied, setCopied] = useState(false);
+  const [issueUrl, setIssueUrl] = useState('');
 
   // Aggregate color stats across all pages
   const colorStats = useMemo(() => aggregateColorStats(pages), [pages]);
+
+  useEffect(() => {
+    setIssueUrl(localStorage.getItem('component-cop-issue-url') ?? '');
+  }, []);
+
+  const multiVariantGroups = useMemo(() => {
+    return groupByName(components).filter((g) => {
+      const fps = new Set(g.components.map((c) => c.styleFingerprint));
+      return fps.size > 1;
+    });
+  }, [components]);
+
+  const generateMarkdown = useCallback(() => {
+    const lines: string[] = [
+      '# Component Cop Report',
+      '',
+      `Generated: ${new Date().toISOString()}`,
+      '',
+      '## Summary',
+      '',
+      `- Pages scanned: ${pages.length}`,
+      `- Components found: ${components.length}`,
+      `- Pattern groups: ${patterns.length}`,
+      `- Multi-variant groups: ${multiVariantGroups.length}`,
+      `- Hardcoded colors: ${colorStats.topColors.length}`,
+      `- Near-duplicate color pairs: ${colorStats.nearDuplicates.length}`,
+      '',
+    ];
+
+    if (multiVariantGroups.length > 0) {
+      lines.push('## Components To Review', '');
+      for (const group of multiVariantGroups.slice(0, 20)) {
+        const byFingerprint = new Map<string, StoredComponent[]>();
+        for (const comp of group.components) {
+          const existing = byFingerprint.get(comp.styleFingerprint) ?? [];
+          existing.push(comp);
+          byFingerprint.set(comp.styleFingerprint, existing);
+        }
+        lines.push(`### ${group.name}`);
+        lines.push('');
+        lines.push(`- Instances: ${group.components.length}`);
+        lines.push(`- Variants: ${byFingerprint.size}`);
+        let variantIdx = 0;
+        for (const [, comps] of byFingerprint) {
+          const sample = comps[0];
+          if (!sample) continue;
+          const source = sample.sourceFile ? `${sample.sourceFile}:${sample.sourceLine ?? '?'}` : 'unknown source';
+          lines.push(`- Variant ${variantLabel(variantIdx)}: ${comps.length} instance(s), sample ${source}`);
+          variantIdx++;
+        }
+        lines.push('');
+      }
+    }
+
+    if (colorStats.topColors.length > 0) {
+      lines.push('## Color Audit', '');
+      lines.push('| Color | Count | Used as | Severity |');
+      lines.push('|---|---:|---|---|');
+      for (const color of colorStats.topColors.slice(0, 15)) {
+        lines.push(`| \`${color.hex}\` | ${color.count} | ${color.usedAs.join(', ')} | ${color.severities.join(', ')} |`);
+      }
+      lines.push('');
+    }
+
+    if (colorStats.nearDuplicates.length > 0) {
+      lines.push('## Near-Duplicate Colors', '');
+      lines.push('| A | B | Distance |');
+      lines.push('|---|---|---:|');
+      for (const pair of colorStats.nearDuplicates.slice(0, 15)) {
+        lines.push(`| \`${pair.a}\` | \`${pair.b}\` | ${pair.distance.toFixed(1)} |`);
+      }
+      lines.push('');
+    }
+
+    lines.push('## Suggested Next Steps', '');
+    lines.push('- Consolidate the highest-instance multi-variant components first.');
+    lines.push('- Replace repeated hardcoded colors with existing design tokens or new token candidates.');
+    lines.push('- Re-scan after changes and compare with a saved baseline.');
+
+    return lines.join('\n');
+  }, [components.length, colorStats, multiVariantGroups, pages.length, patterns.length]);
 
   const generateExport = useCallback(() => {
     if (format === 'json') {
@@ -55,11 +137,7 @@ export function ExportTab({ components, pages, patterns }: { components: StoredC
       }, null, 2);
     }
 
-    const groups = groupByName(components);
-    const multiVariantGroups = groups.filter((g) => {
-      const fps = new Set(g.components.map((c) => c.styleFingerprint));
-      return fps.size > 1;
-    });
+    if (format === 'markdown') return generateMarkdown();
 
     let output = '<audit_context>\n';
     output += 'You are auditing a React codebase. Below is a component pattern analysis.\n';
@@ -127,7 +205,7 @@ export function ExportTab({ components, pages, patterns }: { components: StoredC
     output += '</instructions>\n';
 
     return output;
-  }, [format, components, pages, patterns, colorStats]);
+  }, [format, components, pages, patterns, colorStats, generateMarkdown, multiVariantGroups]);
 
   const preview = useMemo(() => generateExport(), [generateExport]);
 
@@ -141,7 +219,7 @@ export function ExportTab({ components, pages, patterns }: { components: StoredC
 
   const handleDownload = useCallback(() => {
     const text = generateExport();
-    const ext = format === 'json' ? 'json' : 'xml';
+    const ext = format === 'json' ? 'json' : format === 'markdown' ? 'md' : 'xml';
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -150,6 +228,21 @@ export function ExportTab({ components, pages, patterns }: { components: StoredC
     a.click();
     URL.revokeObjectURL(url);
   }, [generateExport, format]);
+
+  const handleIssueUrlChange = useCallback((value: string) => {
+    setIssueUrl(value);
+    localStorage.setItem('component-cop-issue-url', value);
+  }, []);
+
+  const handleCreateIssue = useCallback(() => {
+    const body = generateMarkdown();
+    const title = `Component Cop report: ${multiVariantGroups.length} component group(s) to review`;
+    const base = issueUrl.trim() || 'https://github.com/new';
+    const url = new URL(base);
+    url.searchParams.set('title', title);
+    url.searchParams.set('body', body);
+    window.open(url.toString(), '_blank', 'noopener,noreferrer');
+  }, [generateMarkdown, issueUrl, multiVariantGroups.length]);
 
   if (components.length === 0) {
     return <EmptyState title="Nothing to export" description="Scan some pages first to generate export data." />;
@@ -160,7 +253,7 @@ export function ExportTab({ components, pages, patterns }: { components: StoredC
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
         <select
           value={format}
-          onChange={(e) => setFormat(e.target.value as 'json' | 'llm')}
+          onChange={(e) => setFormat(e.target.value as 'json' | 'llm' | 'markdown')}
           style={{
             padding: '7px 10px', borderRadius: T.radiusSm,
             border: `1px solid ${T.border}`, background: T.bgSurface,
@@ -169,6 +262,7 @@ export function ExportTab({ components, pages, patterns }: { components: StoredC
         >
           <option value="json">JSON</option>
           <option value="llm">LLM Prompt (XML)</option>
+          <option value="markdown">Markdown Report</option>
         </select>
         <ActionButton onClick={handleCopy} variant="secondary">
           {copied ? 'Copied!' : 'Copy'}
@@ -176,6 +270,28 @@ export function ExportTab({ components, pages, patterns }: { components: StoredC
         <ActionButton onClick={handleDownload} variant="ghost">
           Download
         </ActionButton>
+        <ActionButton onClick={handleCreateIssue} variant="secondary">
+          Create Issue
+        </ActionButton>
+      </div>
+
+      <div style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
+        <label style={{ fontSize: 11, fontWeight: 600, color: T.textMuted }}>
+          Issue URL
+        </label>
+        <input
+          value={issueUrl}
+          onChange={(e) => handleIssueUrlChange(e.target.value)}
+          placeholder="https://github.com/owner/repo/issues/new"
+          style={{
+            padding: '7px 10px', borderRadius: T.radiusSm,
+            border: `1px solid ${T.border}`, background: T.bgSurface,
+            color: T.text, fontSize: 12, outline: 'none', fontFamily: 'inherit',
+          }}
+        />
+        <span style={{ fontSize: 11, color: T.textDim }}>
+          Opens a prefilled issue in a new tab. No report data is sent until you submit it.
+        </span>
       </div>
 
       <div style={{

@@ -87,7 +87,7 @@ export interface StoredPattern {
   name: string;
   variants: PatternVariant[];
   totalInstances: number;
-  computedAt: number;
+  computedAt?: number;
 }
 
 export interface PatternVariant {
@@ -158,4 +158,11 @@ export interface DismissedPattern {
   patternId: string;
   reason: string;
   dismissedAt: number;
+}
+
+export interface AggregatedColorStats {
+  uniqueColors: number;
+  totalUsages: number;
+  topColors: { hex: string; count: number; usedAs: string[]; severities: string[] }[];
+  nearDuplicates: { a: string; b: string; distance: number }[];
 }

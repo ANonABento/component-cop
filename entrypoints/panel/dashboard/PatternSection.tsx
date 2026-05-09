@@ -1,0 +1,586 @@
+import { useCallback, useMemo, useState } from 'react';
+import type { StoredComponent, StoredPattern } from '../../../shared/types';
+import { computeStyleDiff } from '../../../lib/style-diff';
+import { computePropDiff } from '../../../lib/prop-diff';
+import { generateConsolidationSuggestion } from '../../../lib/consolidation';
+import { estimateBundleImpact, formatBytes } from '../../../lib/bundle-impact';
+import { T } from '../theme';
+import { CountBadge, SectionHeader, SearchInput, SourceLink } from '../primitives';
+import { extractKeyStyles, shortenPath } from '../helpers';
+
+export function PatternSection({ patterns, components, dismissed, onDismiss, onRestore }: {
+  patterns: StoredPattern[];
+  components: StoredComponent[];
+  dismissed: Set<string>;
+  onDismiss: (patternId: string, reason: string) => void;
+  onRestore: (patternId: string) => void;
+}) {
+  const [filter, setFilter] = useState('');
+  const [showVariantsOnly, setShowVariantsOnly] = useState(false);
+  const [showDismissed, setShowDismissed] = useState(false);
+  const [expandedPattern, setExpandedPattern] = useState<string | null>(null);
+
+  const componentById = useMemo(() => {
+    const map = new Map<number, StoredComponent>();
+    for (const c of components) map.set(c.id, c);
+    return map;
+  }, [components]);
+
+  const filteredPatterns = useMemo(() => {
+    let result = patterns;
+    if (!showDismissed) result = result.filter((p) => !dismissed.has(p.patternId));
+    if (showVariantsOnly) result = result.filter((p) => p.variants.length > 1);
+    if (filter) {
+      const q = filter.toLowerCase();
+      result = result.filter((p) => p.name.toLowerCase().includes(q));
+    }
+    return result;
+  }, [patterns, filter, showVariantsOnly, dismissed, showDismissed]);
+
+  return (
+    <>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
+        <div style={{ flex: 1 }}>
+          <SearchInput value={filter} onChange={setFilter} placeholder="Filter patterns..." />
+        </div>
+        <label style={{
+          fontSize: 11, color: T.textMuted, display: 'flex', alignItems: 'center',
+          gap: 4, cursor: 'pointer', whiteSpace: 'nowrap',
+        }}>
+          <input
+            type="checkbox"
+            checked={showVariantsOnly}
+            onChange={(e) => setShowVariantsOnly(e.target.checked)}
+            style={{ accentColor: T.accent }}
+          />
+          Variants only
+        </label>
+        <label style={{
+          fontSize: 11, color: T.textMuted, display: 'flex', alignItems: 'center',
+          gap: 4, cursor: 'pointer', whiteSpace: 'nowrap',
+        }}>
+          <input
+            type="checkbox"
+            checked={showDismissed}
+            onChange={(e) => setShowDismissed(e.target.checked)}
+            style={{ accentColor: T.accent }}
+          />
+          Show dismissed ({dismissed.size})
+        </label>
+      </div>
+
+      <SectionHeader>
+        Pattern Groups <CountBadge count={filteredPatterns.length} />
+      </SectionHeader>
+
+      <div>
+        {filteredPatterns.map((pattern) => {
+          const isExpanded = expandedPattern === pattern.patternId;
+          return (
+            <div key={pattern.patternId} style={{
+              marginBottom: 4, background: isExpanded ? T.bgSurface : 'transparent',
+              border: isExpanded ? `1px solid ${T.border}` : 'none',
+              borderRadius: isExpanded ? T.radius : 0,
+              overflow: 'hidden',
+            }}>
+              <div
+                onClick={() => setExpandedPattern(isExpanded ? null : pattern.patternId)}
+                style={{
+                  padding: '10px 12px', cursor: 'pointer',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  borderBottom: `1px solid ${T.borderLight}`,
+                }}
+              >
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: T.text, fontFamily: T.mono }}>
+                    {pattern.name}
+                  </span>
+                  <span style={{ fontSize: 10, color: T.textDim, marginLeft: 8 }}>
+                    {pattern.totalInstances} instances
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {pattern.variants.length > 1 && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 10,
+                      background: 'rgba(251, 146, 60, 0.12)', color: T.orange,
+                    }}>
+                      {pattern.variants.length} variants
+                    </span>
+                  )}
+                  <span style={{ fontSize: 10, color: T.textDim }}>
+                    {isExpanded ? '\u25B2' : '\u25BC'}
+                  </span>
+                </div>
+              </div>
+
+              {isExpanded && (
+                <div style={{ padding: 12 }}>
+                  {pattern.variants.map((variant) => {
+                    const exemplar = componentById.get(variant.exemplarComponentId);
+                    const uniquePages = new Set(
+                      variant.componentIds.map((id) => componentById.get(id)?.pagePath).filter(Boolean),
+                    );
+                    return (
+                      <div key={variant.variantId} style={{
+                        padding: '8px 10px', marginBottom: 6,
+                        background: T.bg, borderRadius: T.radiusSm,
+                        border: `1px solid ${T.borderLight}`,
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: T.text }}>
+                            {variant.label}
+                          </span>
+                          <span style={{ fontSize: 10, color: T.textDim }}>
+                            {variant.componentIds.length} instances, {uniquePages.size} pages
+                          </span>
+                        </div>
+                        {exemplar && (
+                          <div style={{ fontSize: 10, color: T.textDim, marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <SourceLink file={exemplar.sourceFile} line={exemplar.sourceLine} column={exemplar.sourceColumn} />
+                            <span style={{ fontFamily: T.mono }}>
+                              {exemplar.styleCategories.slice(0, 4).join(' | ')}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {pattern.variants.length > 1 && (
+                    <PropDiffView variants={pattern.variants} componentById={componentById} />
+                  )}
+                  {pattern.variants.length > 1 && (
+                    <StyleDiffView variants={pattern.variants} componentById={componentById} />
+                  )}
+                  {pattern.variants.length > 1 && (
+                    <DependencyView variants={pattern.variants} componentById={componentById} />
+                  )}
+                  {pattern.variants.length > 1 && (
+                    <ConsolidationBanner pattern={pattern} componentById={componentById} />
+                  )}
+
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+                    <CopyPatternForLLM pattern={pattern} componentById={componentById} />
+                    {dismissed.has(pattern.patternId) ? (
+                      <button
+                        onClick={() => onRestore(pattern.patternId)}
+                        style={{
+                          padding: '4px 10px', fontSize: 10, fontWeight: 600,
+                          background: 'rgba(52, 211, 153, 0.12)', color: T.green,
+                          border: `1px solid ${T.green}33`, borderRadius: T.radiusSm,
+                          cursor: 'pointer', fontFamily: 'inherit',
+                        }}
+                      >
+                        Restore
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => onDismiss(pattern.patternId, 'intentional')}
+                        style={{
+                          padding: '4px 10px', fontSize: 10, fontWeight: 600,
+                          background: 'rgba(107, 109, 128, 0.12)', color: T.textMuted,
+                          border: `1px solid ${T.border}`, borderRadius: T.radiusSm,
+                          cursor: 'pointer', fontFamily: 'inherit',
+                        }}
+                      >
+                        Dismiss
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+// ─── Style Diff View ───
+
+function StyleDiffView({ variants, componentById }: {
+  variants: StoredPattern['variants'];
+  componentById: Map<number, StoredComponent>;
+}) {
+  const diffs = useMemo(() => {
+    const variantStyles = new Map<string, Record<string, string>>();
+    for (const v of variants) {
+      const exemplar = componentById.get(v.exemplarComponentId);
+      if (exemplar?.computedStyles) {
+        variantStyles.set(v.variantId, exemplar.computedStyles);
+      }
+    }
+    return computeStyleDiff(variantStyles);
+  }, [variants, componentById]);
+
+  const variantLabels = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const v of variants) map.set(v.variantId, v.label);
+    return map;
+  }, [variants]);
+
+  if (diffs.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: 8, marginBottom: 4 }}>
+      <div style={{ fontSize: 10, fontWeight: 600, color: T.textMuted, marginBottom: 6 }}>
+        Style Differences ({diffs.length} properties)
+      </div>
+      <div style={{
+        background: T.bg, borderRadius: T.radiusSm,
+        border: `1px solid ${T.borderLight}`, overflow: 'hidden',
+      }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, fontFamily: T.mono }}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+              <th style={{ padding: '4px 8px', textAlign: 'left', color: T.textDim, fontWeight: 600 }}>Property</th>
+              {variants.map((v) => (
+                <th key={v.variantId} style={{ padding: '4px 8px', textAlign: 'left', color: T.orange, fontWeight: 600 }}>
+                  {variantLabels.get(v.variantId) ?? v.variantId}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {diffs.slice(0, 20).map((diff) => (
+              <tr key={diff.property} style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+                <td style={{ padding: '3px 8px', color: T.accent }}>{diff.property}</td>
+                {variants.map((v) => {
+                  const val = diff.values.get(v.variantId) ?? '';
+                  const shortVal = val.length > 30 ? val.slice(0, 27) + '...' : val;
+                  return (
+                    <td key={v.variantId} style={{ padding: '3px 8px', color: T.text }} title={val}>
+                      {shortVal}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {diffs.length > 20 && (
+          <div style={{ padding: '4px 8px', fontSize: 10, color: T.textDim, textAlign: 'center' }}>
+            +{diffs.length - 20} more properties
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Prop Diff View ───
+
+function PropDiffView({ variants, componentById }: {
+  variants: StoredPattern['variants'];
+  componentById: Map<number, StoredComponent>;
+}) {
+  const diffs = useMemo(() => {
+    const variantProps = new Map<string, Record<string, unknown>>();
+    for (const v of variants) {
+      const exemplar = componentById.get(v.exemplarComponentId);
+      if (exemplar?.props) variantProps.set(v.label, exemplar.props);
+    }
+    return computePropDiff(variantProps);
+  }, [variants, componentById]);
+
+  if (diffs.length === 0) return null;
+
+  const nonShared = diffs.filter((d) => d.classification !== 'shared');
+  if (nonShared.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: 8, marginBottom: 4 }}>
+      <div style={{ fontSize: 10, fontWeight: 600, color: T.textMuted, marginBottom: 6 }}>
+        Prop Differences ({nonShared.length} props)
+      </div>
+      <div style={{
+        background: T.bg, borderRadius: T.radiusSm,
+        border: `1px solid ${T.borderLight}`, overflow: 'hidden',
+      }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, fontFamily: T.mono }}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+              <th style={{ padding: '4px 8px', textAlign: 'left', color: T.textDim, fontWeight: 600 }}>Prop</th>
+              <th style={{ padding: '4px 8px', textAlign: 'left', color: T.textDim, fontWeight: 600, width: 60 }}>Type</th>
+              {variants.map((v) => (
+                <th key={v.variantId} style={{ padding: '4px 8px', textAlign: 'left', color: T.orange, fontWeight: 600 }}>
+                  {v.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {nonShared.slice(0, 15).map((diff) => (
+              <tr key={diff.key} style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+                <td style={{ padding: '3px 8px', color: T.accent }}>{diff.key}</td>
+                <td style={{ padding: '3px 8px' }}>
+                  <span style={{
+                    fontSize: 9, fontWeight: 600, padding: '1px 5px', borderRadius: 6,
+                    background: diff.classification === 'unique' ? 'rgba(248, 113, 113, 0.12)' : 'rgba(251, 191, 36, 0.12)',
+                    color: diff.classification === 'unique' ? T.red : T.yellow,
+                  }}>
+                    {diff.classification}
+                  </span>
+                </td>
+                {variants.map((v) => {
+                  const val = diff.values.get(v.label) ?? '';
+                  const shortVal = val.length > 25 ? val.slice(0, 22) + '...' : val;
+                  return (
+                    <td key={v.variantId} style={{
+                      padding: '3px 8px',
+                      color: val === '(not set)' ? T.textDim : T.text,
+                      fontStyle: val === '(not set)' ? 'italic' : 'normal',
+                    }} title={val}>
+                      {shortVal}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {nonShared.length > 15 && (
+          <div style={{ padding: '4px 8px', fontSize: 10, color: T.textDim, textAlign: 'center' }}>
+            +{nonShared.length - 15} more props
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Dependency View ───
+
+function DependencyView({ variants, componentById }: {
+  variants: StoredPattern['variants'];
+  componentById: Map<number, StoredComponent>;
+}) {
+  const pageMap = useMemo(() => {
+    const result: { label: string; pages: { path: string; count: number }[] }[] = [];
+    for (const v of variants) {
+      const pageCounts = new Map<string, number>();
+      for (const id of v.componentIds) {
+        const comp = componentById.get(id);
+        if (comp) pageCounts.set(comp.pagePath, (pageCounts.get(comp.pagePath) ?? 0) + 1);
+      }
+      result.push({
+        label: v.label,
+        pages: Array.from(pageCounts.entries())
+          .map(([path, count]) => ({ path, count }))
+          .sort((a, b) => b.count - a.count),
+      });
+    }
+    return result;
+  }, [variants, componentById]);
+
+  const allPages = useMemo(() => {
+    const set = new Set<string>();
+    for (const v of pageMap) for (const p of v.pages) set.add(p.path);
+    return Array.from(set).sort();
+  }, [pageMap]);
+
+  if (allPages.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: 8, marginBottom: 4 }}>
+      <div style={{ fontSize: 10, fontWeight: 600, color: T.textMuted, marginBottom: 6 }}>
+        Page Usage ({allPages.length} pages)
+      </div>
+      <div style={{
+        background: T.bg, borderRadius: T.radiusSm,
+        border: `1px solid ${T.borderLight}`, overflow: 'hidden',
+      }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, fontFamily: T.mono }}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+              <th style={{ padding: '4px 8px', textAlign: 'left', color: T.textDim, fontWeight: 600 }}>Page</th>
+              {pageMap.map((v) => (
+                <th key={v.label} style={{ padding: '4px 8px', textAlign: 'center', color: T.orange, fontWeight: 600 }}>
+                  {v.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {allPages.slice(0, 15).map((pagePath) => (
+              <tr key={pagePath} style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+                <td style={{ padding: '3px 8px', color: T.text, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    title={pagePath}>
+                  {shortenPath(pagePath)}
+                </td>
+                {pageMap.map((v) => {
+                  const entry = v.pages.find((p) => p.path === pagePath);
+                  return (
+                    <td key={v.label} style={{
+                      padding: '3px 8px', textAlign: 'center',
+                      color: entry ? T.green : T.textDim,
+                      fontWeight: entry ? 600 : 400,
+                    }}>
+                      {entry ? entry.count : '—'}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {allPages.length > 15 && (
+          <div style={{ padding: '4px 8px', fontSize: 10, color: T.textDim, textAlign: 'center' }}>
+            +{allPages.length - 15} more pages
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Consolidation Banner ───
+
+const EFFORT_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  low: { bg: 'rgba(52, 211, 153, 0.12)', text: T.green, label: 'Quick win' },
+  medium: { bg: 'rgba(251, 191, 36, 0.12)', text: T.yellow, label: 'Moderate' },
+  high: { bg: 'rgba(248, 113, 113, 0.12)', text: T.red, label: 'Major refactor' },
+};
+
+function ConsolidationBanner({ pattern, componentById }: {
+  pattern: StoredPattern;
+  componentById: Map<number, StoredComponent>;
+}) {
+  const suggestion = useMemo(
+    () => generateConsolidationSuggestion(pattern, componentById),
+    [pattern, componentById],
+  );
+
+  const savings = useMemo(() => {
+    const impact = estimateBundleImpact([pattern], componentById);
+    return impact.patterns[0]?.estimatedSavings ?? 0;
+  }, [pattern, componentById]);
+
+  if (!suggestion) return null;
+
+  const effortStyle = EFFORT_COLORS[suggestion.effort] ?? EFFORT_COLORS.medium!;
+
+  return (
+    <div style={{
+      marginTop: 8, padding: '10px 12px',
+      background: 'rgba(129, 140, 248, 0.06)',
+      border: `1px solid ${T.accentDim}`,
+      borderRadius: T.radiusSm,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: T.accent }}>Suggestion</span>
+        <span style={{
+          fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8,
+          background: effortStyle.bg, color: effortStyle.text,
+        }}>
+          {effortStyle.label}
+        </span>
+        {savings > 0 && (
+          <span style={{
+            fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 8,
+            background: 'rgba(52, 211, 153, 0.12)', color: T.green,
+          }}>
+            ~{formatBytes(savings)} savings
+          </span>
+        )}
+      </div>
+      <div style={{ fontSize: 11, color: T.text, lineHeight: 1.5 }}>
+        {suggestion.suggestion}
+      </div>
+      {suggestion.propApi && (
+        <div style={{
+          marginTop: 6, padding: '4px 8px',
+          background: T.bg, borderRadius: T.radiusSm,
+          fontFamily: T.mono, fontSize: 10, color: T.accent,
+        }}>
+          {suggestion.propApi}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Copy Pattern for LLM ───
+
+function CopyPatternForLLM({ pattern, componentById }: {
+  pattern: StoredPattern;
+  componentById: Map<number, StoredComponent>;
+}) {
+  const [status, setStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+
+  const handleCopy = useCallback(() => {
+    let xml = `<pattern_group name="${pattern.name}" instances="${pattern.totalInstances}">\n`;
+    for (const variant of pattern.variants) {
+      const exemplar = componentById.get(variant.exemplarComponentId);
+      xml += `  <variant label="${variant.label}" instances="${variant.componentIds.length}">\n`;
+      for (const id of variant.componentIds.slice(0, 5)) {
+        const comp = componentById.get(id);
+        if (comp) {
+          xml += `    <instance file="${comp.sourceFile ?? 'unknown'}" line="${comp.sourceLine ?? '?'}" page="${comp.pagePath}" />\n`;
+        }
+      }
+      if (variant.componentIds.length > 5) xml += `    <!-- ... and ${variant.componentIds.length - 5} more -->\n`;
+      if (exemplar) {
+        const keyStyles = extractKeyStyles(exemplar.computedStyles);
+        xml += `    <exemplar_styles>${exemplar.styleCategories.join(' | ')}</exemplar_styles>\n`;
+        xml += `    <computed_styles>\n`;
+        for (const [prop, val] of Object.entries(keyStyles)) {
+          xml += `      ${prop}: ${val}\n`;
+        }
+        xml += `    </computed_styles>\n`;
+      }
+      xml += '  </variant>\n';
+    }
+
+    if (pattern.variants.length > 1) {
+      const variantStyles = new Map<string, Record<string, string>>();
+      for (const v of pattern.variants) {
+        const exemplar = componentById.get(v.exemplarComponentId);
+        if (exemplar) variantStyles.set(v.label, exemplar.computedStyles);
+      }
+      const diffs = computeStyleDiff(variantStyles);
+      if (diffs.length > 0) {
+        xml += `\n  <style_diff properties="${diffs.length}">\n`;
+        for (const diff of diffs.slice(0, 20)) {
+          xml += `    <property name="${diff.property}">\n`;
+          for (const [label, val] of diff.values) {
+            xml += `      ${label}: ${val}\n`;
+          }
+          xml += `    </property>\n`;
+        }
+        if (diffs.length > 20) xml += `    <!-- ... and ${diffs.length - 20} more properties -->\n`;
+        xml += `  </style_diff>\n`;
+      }
+    }
+
+    xml += '</pattern_group>\n\n';
+    xml += '<instructions>\n';
+    xml += `Analyze the "${pattern.name}" component pattern above.\n`;
+    xml += '1. Read each variant\'s source files\n';
+    xml += '2. Identify the canonical variant (most instances)\n';
+    xml += '3. Compare the style_diff section to understand exact CSS differences\n';
+    xml += '4. Generate migration code to consolidate non-canonical variants\n';
+    xml += '5. Suggest a unified prop API if variants differ by size, color, or layout\n';
+    xml += '</instructions>\n';
+
+    navigator.clipboard.writeText(xml).then(
+      () => { setStatus('copied'); setTimeout(() => setStatus('idle'), 2000); },
+      () => { setStatus('failed'); setTimeout(() => setStatus('idle'), 2000); },
+    );
+  }, [pattern, componentById]);
+
+  return (
+    <button onClick={handleCopy} style={{
+      marginTop: 6, padding: '5px 10px', fontSize: 10, fontWeight: 600,
+      background: status === 'copied' ? 'rgba(52, 211, 153, 0.12)' : status === 'failed' ? 'rgba(248, 113, 113, 0.12)' : 'rgba(129, 140, 248, 0.08)',
+      color: status === 'copied' ? T.green : status === 'failed' ? T.red : T.accent,
+      border: `1px solid ${status === 'copied' ? T.green : status === 'failed' ? T.red : T.accentDim}`,
+      borderRadius: T.radiusSm, cursor: 'pointer', fontFamily: 'inherit',
+      width: '100%',
+    }}>
+      {status === 'copied' ? 'Copied!' : status === 'failed' ? 'Copy failed' : 'Copy for LLM'}
+    </button>
+  );
+}

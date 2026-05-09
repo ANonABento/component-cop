@@ -23,5 +23,5 @@
     "**/*.tsx",
     ".wxt/wxt.d.ts"
   ],
-  "exclude": ["node_modules", ".output", ".wxt"]
+  "exclude": ["node_modules", ".output"]
 }

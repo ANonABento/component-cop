@@ -7,6 +7,7 @@ export function ScanTab({ onScan, scanning, lastScan, reactStatus }: {
   onScan: () => void; scanning: boolean; lastScan: ScanResult | null; reactStatus: ReactDetectionResult | null;
 }) {
   const [filter, setFilter] = useState('');
+  const [safetyAccepted, setSafetyAccepted] = useState(false);
   const disabled = scanning || !reactStatus?.found;
 
   const filteredComponents = useMemo(() => {
@@ -21,10 +22,41 @@ export function ScanTab({ onScan, scanning, lastScan, reactStatus }: {
 
   return (
     <div>
+      {!lastScan && (
+        <div style={{
+          border: `1px solid ${T.border}`,
+          background: T.bgSurface,
+          borderRadius: T.radius,
+          padding: 14,
+          marginBottom: 14,
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 6 }}>
+            Before you scan
+          </div>
+          <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.5, marginBottom: 10 }}>
+            Component Cop only inspects the active tab when you start a scan. Results stay in this browser profile unless you export or clear them.
+          </div>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12, color: T.text }}>
+            <input
+              type="checkbox"
+              checked={safetyAccepted}
+              onChange={(e) => setSafetyAccepted(e.target.checked)}
+              style={{ marginTop: 2 }}
+            />
+            <span>I have permission to inspect this page and understand scan data is stored locally for reports.</span>
+          </label>
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
-        <ActionButton onClick={onScan} disabled={disabled}>
+        <ActionButton onClick={onScan} disabled={disabled || (!lastScan && !safetyAccepted)}>
           {scanning ? (<><Spinner /> Scanning...</>) : 'Scan Page'}
         </ActionButton>
+        {!lastScan && !safetyAccepted && reactStatus?.found && (
+          <span style={{ fontSize: 11, color: T.textDim }}>
+            Confirm scan safety to enable one-click scan
+          </span>
+        )}
         {reactStatus?.mode === 'prod' && (
           <span style={{ fontSize: 11, color: T.yellow, opacity: 0.8 }}>
             Prod build — names may be minified

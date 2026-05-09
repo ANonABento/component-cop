@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateTokenMap } from '../token-generator';
-import type { AggregatedColorStats } from '../../entrypoints/panel/helpers';
+import type { AggregatedColorStats } from '../../shared/types';
 
 function makeStats(overrides: Partial<AggregatedColorStats> = {}): AggregatedColorStats {
   return {
